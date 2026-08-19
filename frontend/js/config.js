@@ -1,72 +1,71 @@
 /* ============================================================
- *  FRESHMART — EmailJS & Environment Configuration
- *  Loads EmailJS credentials from the backend /config endpoint
- *  and initialises the EmailJS SDK for register/login flows.
+ *  TRIUMPHSMART — EmailJS Configuration
+ *  Fully frontend-only. No backend required.
+ *  Configure your EmailJS credentials below or via
+ *  localStorage (set in the browser console).
+ *
+ *  Setup:
+ *  1. Go to https://dashboard.emailjs.com/ and create an account
+ *  2. Add an Email Service (e.g. Gmail)
+ *  3. Create templates for verification & login
+ *  4. Set the values below (or use localStorage keys)
  * ============================================================ */
 
-var ENV = {
-    BACKEND_URL: (typeof window !== "undefined" && window.ENV_BACKEND_URL) || "http://127.0.0.1:5000",
-    EMAILJS_LOADED: false
-};
-
-// EmailJS configuration state
-var EMAILJS_STATE = {
-    serviceId: null,
-    templateId: null,
-    loginTemplateId: null,
-    publicKey: null,
-    initialized: false,
-    backendAvailable: false
-};
-
-/**
- * Fetch EmailJS configuration from the backend /config endpoint.
- * Returns true if config was loaded successfully.
+/* ---- EmailJS credentials ----
+ * Set these to your actual EmailJS values, OR set them in
+ * your browser console with:
+ *   localStorage.setItem("tm_emailjs_service_id", "your_service_id");
+ *   localStorage.setItem("tm_emailjs_template_id", "your_template_id");
+ *   localStorage.setItem("tm_emailjs_public_key", "your_public_key");
  */
-async function loadEmailJSConfig() {
+var EMAILJS_SERVICE_ID = localStorage.getItem("tm_emailjs_service_id") || "default_service";
+var EMAILJS_TEMPLATE_ID = localStorage.getItem("tm_emailjs_template_id") || "template_triumphsmart_verify";
+var EMAILJS_LOGIN_TEMPLATE_ID = localStorage.getItem("tm_emailjs_login_template_id") || "template_triumphsmart_login";
+var EMAILJS_PUBLIC_KEY = localStorage.getItem("tm_emailjs_public_key") || "";
+
+var EMAILJS_STATE = {
+    serviceId: service_t3trcne,
+    templateId: template_ddax5bh,
+    loginTemplateId: template_ddax5bh,
+    publicKey: 1JESagoXdGOO8s-EK,
+    initialized: false
+};
+
+/* ---- Check if EmailJS is properly configured ---- */
+function isEmailJSConfigured() {
+    return EMAILJS_STATE.publicKey &&
+        EMAILJS_STATE.publicKey.indexOf("PLEASE_SET") === -1 &&
+        EMAILJS_STATE.serviceId &&
+        EMAILJS_STATE.serviceId.indexOf("default_service") === -1 &&
+        EMAILJS_STATE.templateId &&
+        EMAILJS_STATE.templateId.indexOf("template_") !== 0 ||
+        // Also allow actual custom templates: a real template ID is user-set
+        (EMAILJS_STATE.publicKey.length > 10 && EMAILJS_STATE.serviceId.length > 3 && EMAILJS_STATE.templateId.length > 3);
+}
+
+/* ---- Initialize EmailJS SDK ---- */
+function initEmailJS() {
+    if (typeof emailjs === "undefined") {
+        console.warn("EmailJS SDK not loaded. Add: <script src='https://cdn.emailjs.com/sdk/latest/email.min.js'></script>");
+        return false;
+    }
     try {
-        var response = await fetch(ENV.BACKEND_URL + "/config", {
-            method: "GET",
-            headers: { "Content-Type": "application/json" }
-        });
-
-        if (!response.ok) throw new Error("Config endpoint returned " + response.status);
-
-        var config = await response.json();
-
-        EMAILJS_STATE.serviceId = config.emailjs_service_id || config.service_id || "";
-        EMAILJS_STATE.templateId = config.emailjs_template_id || config.templateId || "";
-        EMAILJS_STATE.loginTemplateId = config.emailjs_login_template_id || config.loginTemplateId || "";
-        EMAILJS_STATE.publicKey = config.emailjs_public_key || config.publicKey || "";
-        EMAILJS_STATE.backendAvailable = true;
-
-        // Initialise EmailJS SDK if the library is loaded and we have a key
-        if (typeof emailjs !== "undefined" && EMAILJS_STATE.publicKey) {
-            emailjs.init(EMAILJS_STATE.publicKey);
-            EMAILJS_STATE.initialized = true;
-        }
-
-        console.log("EmailJS config loaded successfully");
+        emailjs.init(EMAILJS_STATE.publicKey);
+        EMAILJS_STATE.initialized = true;
+        console.log("EmailJS initialized successfully");
         return true;
-
     } catch (err) {
-        console.warn("Could not load EmailJS config from backend:", err);
-        EMAILJS_STATE.backendAvailable = false;
+        console.error("EmailJS init failed:", err);
         return false;
     }
 }
 
-/**
- * Generate a random 6-digit verification code.
- */
+/* ---- Generate 6-digit verification code ---- */
 function generateVerificationCode() {
     return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-/**
- * Store a verification code in localStorage with a timestamp.
- * The code expires after 10 minutes.
- */
+/* ---- Store verification code (10 min expiry) ---- */
 function storeVerificationCode(email, code) {
     localStorage.setItem("verification_code_" + email, JSON.stringify({
         code: code,
@@ -74,13 +73,10 @@ function storeVerificationCode(email, code) {
     }));
 }
 
-/**
- * Retrieve a verification code from localStorage if it exists and hasn't expired.
- */
+/* ---- Retrieve verification code ---- */
 function getStoredVerificationCode(email) {
     var stored = localStorage.getItem("verification_code_" + email);
     if (!stored) return null;
-
     var data = JSON.parse(stored);
     // 10-minute expiry
     if (Date.now() - data.timestamp > 10 * 60 * 1000) {
@@ -90,142 +86,91 @@ function getStoredVerificationCode(email) {
     return data.code;
 }
 
-/**
- * Send a verification email via EmailJS.
- * Falls back to the backend /send-code endpoint if EmailJS is unavailable.
- */
+/* ---- Send verification email via EmailJS ---- */
 async function sendVerificationEmail(email, code, userName) {
-    // Ensure config is loaded
+    if (!isEmailJSConfigured()) {
+        // EmailJS not configured — store code, show it clearly on verify page
+        console.log("=== DEV MODE: Verification code for " + email + " is: " + code + " ===");
+        localStorage.setItem("dev_verification_code", code);
+        localStorage.setItem("dev_verification_email", email);
+        showToast("Code saved — check the verification page", "success");
+        return true;
+    }
     if (!EMAILJS_STATE.initialized) {
-        await loadEmailJSConfig();
+        initEmailJS();
     }
-
-    // Primary: EmailJS
-    if (EMAILJS_STATE.initialized && EMAILJS_STATE.serviceId && EMAILJS_STATE.templateId) {
-        try {
-            var result = await emailjs.send(
-                EMAILJS_STATE.serviceId,
-                EMAILJS_STATE.templateId,
-                {
-                    to_email: email,
-                    to_name: userName || "there",
-                    verification_code: code,
-                    app_name: "FreshMart"
-                }
-            );
-            console.log("EmailJS verification email sent:", result.status);
-            return true;
-        } catch (err) {
-            console.error("EmailJS send failed:", err);
-        }
-    }
-
-    // Fallback: backend /send-code (stores code server-side too)
-    if (EMAILJS_STATE.backendAvailable) {
-        try {
-            var response = await fetch(ENV.BACKEND_URL + "/send-code", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: email, code: code })
-            });
-            var result = await response.json();
-            if (result.success) {
-                console.log("Backend fallback: code sent to", email);
-                return true;
+    try {
+        var result = await emailjs.send(
+            EMAILJS_STATE.serviceId,
+            EMAILJS_STATE.templateId,
+            {
+                to_email: email,
+                to_name: userName || "there",
+                verification_code: code,
+                app_name: "TriumphsMart"
             }
-        } catch (err) {
-            console.error("Backend send-code fallback failed:", err);
-        }
+        );
+        console.log("EmailJS verification email sent:", result.status);
+        return true;
+    } catch (err) {
+        console.error("EmailJS send failed:", err);
+        // Fallback: store code so user can see it on verify page
+        localStorage.setItem("dev_verification_code", code);
+        localStorage.setItem("dev_verification_email", email);
+        showToast("Email failed — code shown on verify page", "success");
+        return true;
     }
-
-    // Final fallback: simulate in dev mode (shows alert)
-    if (typeof alert !== "undefined") {
-        // In development, we can use the code directly from backend response
-        try {
-            var response = await fetch(ENV.BACKEND_URL + "/send-code", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: email })
-            });
-            var result = await response.json();
-            if (result.success && result.code) {
-                console.log("Dev mode: verification code =", result.code);
-                return true;
-            }
-        } catch (err) {
-            console.error("All email delivery methods failed:", err);
-        }
-    }
-
-    return false;
 }
 
-/**
- * Send a login notification email via EmailJS.
- */
+/* ---- Send login notification via EmailJS ---- */
 async function sendLoginNotification(email, userName) {
-    // Ensure config is loaded
     if (!EMAILJS_STATE.initialized) {
-        await loadEmailJSConfig();
+        initEmailJS();
     }
-
-    var templateId = EMAILJS_STATE.loginTemplateId || EMAILJS_STATE.templateId;
-
-    if (EMAILJS_STATE.initialized && EMAILJS_STATE.serviceId && templateId) {
-        try {
-            var result = await emailjs.send(
-                EMAILJS_STATE.serviceId,
-                templateId,
-                {
-                    to_email: email,
-                    to_name: userName || "there",
-                    login_time: new Date().toLocaleString(),
-                    app_name: "FreshMart Login"
-                }
-            );
-            console.log("EmailJS login notification sent:", result.status);
-            return true;
-        } catch (err) {
-            console.error("EmailJS login notification failed:", err);
-        }
+    if (!EMAILJS_STATE.initialized) {
+        console.log("Dev mode: login notification skipped for " + email);
+        return false;
     }
-
-    console.warn("Login notification not sent (EmailJS unavailable)");
-    return false;
+    try {
+        var result = await emailjs.send(
+            EMAILJS_STATE.serviceId,
+            EMAILJS_STATE.loginTemplateId || EMAILJS_STATE.templateId,
+            {
+                to_email: email,
+                to_name: userName || "there",
+                login_time: new Date().toLocaleString(),
+                app_name: "TriumphsMart Login"
+            }
+        );
+        console.log("EmailJS login notification sent:", result.status);
+        return true;
+    } catch (err) {
+        console.error("EmailJS login notification failed:", err);
+        return false;
+    }
 }
 
-/**
- * Verify a code against server-side store (backend fallback) or
- * localStorage (EmailJS path).
- */
+/* ---- Verify code against localStorage ---- */
 async function verifyCodeRemotely(email, code) {
     var localCode = getStoredVerificationCode(email);
     if (localCode && localCode === code) {
         localStorage.removeItem("verification_code_" + email);
         return true;
     }
-
-    // Try backend verification as fallback
-    if (EMAILJS_STATE.backendAvailable) {
-        try {
-            var response = await fetch(ENV.BACKEND_URL + "/verify-code", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: email, code: code })
-            });
-            var result = await response.json();
-            return result.success;
-        } catch (err) {
-            console.error("Backend verify-code failed:", err);
-        }
+    // Dev mode fallback: check stored dev code
+    var devCode = localStorage.getItem("dev_verification_code");
+    var devEmail = localStorage.getItem("dev_verification_email");
+    if (devCode && devCode === code && (!devEmail || devEmail === email)) {
+        localStorage.removeItem("dev_verification_code");
+        localStorage.removeItem("dev_verification_email");
+        return true;
     }
-
     return false;
 }
 
-// Auto-load config on script init (non-blocking)
-(function autoLoadConfig() {
+/* ---- Auto-init on script load ---- */
+(function autoInit() {
     if (typeof emailjs !== "undefined") {
-        loadEmailJSConfig();
+        initEmailJS();
     }
 })();

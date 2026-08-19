@@ -3,37 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Placed — FreshMart</title>
+    <title>Order Confirmed - TriumphsMart</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
-<!-- Top utility bar -->
 <div class="topbar">
     <div class="topbar-left">
-        <a href="#" class="flag">🇦 &nbsp; English</a>
+        <a href="#" class="flag">EN English</a>
         <a href="index.html">Home</a>
+        <a href="products.html">Shop</a>
     </div>
-    <a href="#" class="flag">🌐 EN</a>
+    <a href="#" class="flag">EN</a>
 </div>
 
 <header class="navbar">
     <div class="nav-row">
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="index.html" class="brand"><span class="brand-mark">🛒</span><span>FreshMart</span></a>
-            <button class="category-btn" id="categoryBtn">
-                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
-                <span>Categories</span>
-            </button>
-            <div class="category-dropdown" id="categoryDropdown">
-                <a href="#" class="cat-item"><span class="cat-icon">🥫</span> Pantry Staples</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥩</span> Fresh Meat</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥬</span> Vegetables</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🧁</span> Bakery</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥛</span> Dairy</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🍚</span> Grains</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥤</span> Drinks</a>
-            </div>
+            <a href="index.html" class="brand"><span class="brand-mark">SHOP</span><span>TriumphsMart</span></a>
             <div class="nav-links" id="navLinks">
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="products.html" class="nav-link">Shop</a>
@@ -42,67 +29,52 @@
         </div>
         <div class="nav-actions">
             <a href="cart.html" class="nav-action">
-                <span class="action-icon">🛒</span>
+                <span class="action-icon">CART</span>
                 <span>Cart</span>
                 <span class="badge" id="cart-count">0</span>
             </a>
-            <button class="category-btn mobile-nav" id="themeToggle" onclick="toggleTheme()" style="background:#f0f2f5;color:#212121;">🌙</button>
-            <button class="category-btn mobile-nav" id="menuToggle" style="background:#f0f2f5;color:#212121;">
-                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
-            </button>
+            <a href="dashboard.html" class="nav-action" id="authAction">
+                <span class="action-icon">USER</span>
+                <span>Account</span>
+            </a>
         </div>
     </div>
 </header>
 
-<!-- Mobile overlay -->
-<div class="mobile-overlay" id="mobileOverlay"></div>
-
-<!-- Mobile sliding menu -->
-<nav class="mobile-menu" id="mobileMenu">
-    <button class="close-menu" id="closeMenu">&times;</button>
-    <div class="mobile-nav-links" id="mobileNavLinks">
-        <a href="index.html">Home</a>
-        <a href="products.html">Shop</a>
-        <a href="cart.html">Cart</a>
-        <a href="login.html">Login</a>
-        <a href="register.html">Register</a>
-    </div>
-</nav>
-
 <main>
     <section class="thankyou">
-        <div class="big">✅</div>
-        <h1>Order Placed Successfully!</h1>
-        <p>Thank you for your order! Your items are being prepared for delivery.</p>
-        <div class="order-ref">
-            <div style="font-weight:700;margin-bottom:8px;">Order Reference</div>
-            <div id="orderRef" style="font-size:18px;font-weight:800;color:var(--c-primary);letter-spacing:2px;">FM-XXXXXX</div>
+        <div class="big">CHECK</div>
+        <h1>Order Confirmed!</h1>
+        <p>Thank you for shopping with TriumphsMart. Your order has been received and will be processed shortly.</p>
+        <div class="order-ref" id="orderRef"></div>
+        <div class="hero-actions" style="justify-content:center;margin-top:24px;">
+            <a href="products.html" class="primary-btn" style="background:var(--c-primary);color:#fff;">Continue Shopping</a>
+            <a href="dashboard.html" class="secondary-btn" style="background:#f5f7f9;color:var(--c-text);border:1px solid var(--c-border);">View My Orders</a>
         </div>
-        <p style="margin-top:20px;">A confirmation has been sent. You can track your order status in your FreshMart account.</p>
-        <a href="index.html" class="primary-btn" style="margin-top:24px;">Continue Shopping</a>
     </section>
 </main>
 
 <footer class="site-footer">
     <div class="footer-bottom">
-        <p>&copy; 2026 FreshMart Supermarket. All rights reserved.</p>
+        <p>Copyright 2026 TriumphsMart. All rights reserved.</p>
     </div>
 </footer>
 
 <script src="js/config.js"></script>
+<script src="js/data.js"></script>
 <script src="js/main.js"></script>
 <script>
-(function () {
-    var orderRef = localStorage.getItem("lastOrderRef");
-    var refEl = document.getElementById("orderRef");
-    if (refEl) {
-        if (orderRef) {
-            refEl.textContent = "FM-" + orderRef.slice(-6);
-        } else {
-            refEl.textContent = "FM-" + Date.now().toString().slice(-6);
-        }
+window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+    var params = new URLSearchParams(window.location.search);
+    var ref = params.get("ref");
+    var el = document.getElementById("orderRef");
+    if (el) {
+        el.textContent = ref ? "Your order reference: " + ref : "Your order reference: TM" + Date.now().toString().slice(-8);
     }
-})();
+});
 </script>
 </body>
 </html>

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — TriumphsMart</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .admin-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 28px 4%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .admin-card {
+            background: var(--c-card-bg);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            box-shadow: var(--c-shadow);
+            padding: 24px;
+        }
+        body.dark-mode .admin-card {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+        }
+        .admin-card h2 {
+            margin: 0 0 6px;
+            font-size: 20px;
+            color: var(--c-text);
+        }
+        body.dark-mode .admin-card h2 { color: var(--c-dark-text); }
+        .admin-card p.sub {
+            margin: 0 0 20px;
+            color: var(--c-text-secondary);
+            font-size: 14px;
+        }
+        .admin-card label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--c-text-secondary);
+            margin: 14px 0 6px;
+        }
+        .admin-card input[type="text"],
+        .admin-card input[type="number"],
+        .admin-card input[type="password"],
+        .admin-card textarea,
+        .admin-card select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--c-border);
+            border-radius: 10px;
+            font-size: 15px;
+            outline: none;
+            background: var(--c-card-bg);
+            color: var(--c-text);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        body.dark-mode .admin-card input,
+        body.dark-mode .admin-card textarea,
+        body.dark-mode .admin-card select {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+            color: var(--c-dark-text);
+        }
+        .admin-card input:focus,
+        .admin-card textarea:focus,
+        .admin-card select:focus {
+            border-color: #fdd5cc;
+            box-shadow: 0 0 0 3px rgba(252, 104, 63, 0.12);
+        }
+        .admin-card textarea {
+            resize: vertical;
+            min-height: 90px;
+        }
+        .admin-btn {
+            width: 100%;
+            background: var(--c-primary);
+            color: #fff;
+            border: none;
+            border-radius: 26px;
+            padding: 13px 16px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 18px;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .admin-btn:hover {
+            background: var(--c-primary-dark);
+            transform: translateY(-1px);
+        }
+        .admin-btn.secondary {
+            background: #e53935;
+        }
+        .admin-btn.secondary:hover { background: #c62828; }
+        .admin-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--c-text-secondary);
+        }
+        .admin-checkbox input { width: auto; }
+
+        /* Image upload grid */
+        .image-upload-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .image-upload-slot {
+            position: relative;
+            border: 2px dashed var(--c-border);
+            border-radius: 10px;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: #fafafa;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        body.dark-mode .image-upload-slot {
+            background: #2a2a2a;
+            border-color: var(--c-dark-border);
+        }
+        .image-upload-slot:hover { border-color: var(--c-primary); }
+        .image-upload-slot .plus {
+            font-size: 26px;
+            color: #bbb;
+        }
+        .image-upload-slot input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+        .image-upload-slot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        /* Product list */
+        .admin-product-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border: 1px solid var(--c-border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+        body.dark-mode .admin-product-item {
+            background: #2a2a2a;
+            border-color: var(--c-dark-border);
+        }
+        .admin-product-item .thumb {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9eef2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .admin-product-item .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .admin-product-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+        .admin-product-item .info h4 {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 0 0 2px;
+            color: var(--c-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        body.dark-mode .admin-product-item .info h4 { color: var(--c-dark-text); }
+        .admin-product-item .info .cat {
+            font-size: 12px;
+            color: var(--c-text-secondary);
+        }
+        .admin-product-item .price {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--c-primary);
+            white-space: nowrap;
+        }
+        .admin-product-item .delete-btn {
+            background: #fee;
+            color: #e53935;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .admin-product-item .delete-btn:hover {
+            background: #e53935;
+            color: #fff;
+        }
+
+        /* Login box */
+        .admin-login {
+            max-width: 420px;
+            margin: 80px auto;
+            text-align: center;
+        }
+        .admin-login .lock-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        @media (max-width: 900px) {
+            .admin-layout { grid-template-columns: 1fr; }
+            .image-upload-grid { grid-template-columns: repeat(3, 1fr); }
+            .admin-card { padding: 20px; }
+        }
+        @media (max-width: 600px) {
+            .image-upload-grid { grid-template-columns: repeat(2, 1fr); }
+            .admin-layout { padding: 16px 3%; }
+            .admin-card { padding: 16px; }
+            .admin-product-item { flex-wrap: wrap; }
+            .admin-product-item .info { flex-basis: calc(100% - 150px); }
+            .admin-product-item .delete-btn { margin-left: auto; }
+        }
+        @media (max-width: 480px) {
+            .admin-card { padding: 14px; }
+            .admin-card h2 { font-size: 18px; }
+            .admin-login { margin: 40px auto; padding: 0 3%; }
+            .admin-login h2 { font-size: 22px; }
+            .image-upload-grid { gap: 6px; }
+            .admin-product-item .thumb {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+            .admin-product-item .info { flex-basis: calc(100% - 130px); }
+            .admin-product-item .price { font-size: 12px; }
+        }
+        @media (max-width: 375px) {
+            .admin-layout { padding: 12px 3%; }
+            .admin-card { padding: 12px; }
+            .image-upload-grid { grid-template-columns: repeat(2, 1fr); }
+            .admin-product-item .info { flex-basis: 100%; }
+            .admin-product-item { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Top utility bar -->
+<div class="topbar">
+    <div class="topbar-left">
+        <a href="index.html">🏠 Home</a>
+        <a href="products.html">Shop</a>
+        <a href="cart.html">Cart</a>
+    </div>
+    <a href="#" class="flag">🔐 Admin</a>
+</div>
+
+<header class="navbar">
+    <div class="nav-row">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <a href="index.html" class="brand"><span class="brand-mark">🛍️</span><span>TriumphsMart</span></a>
+            <div class="nav-links" id="navLinks">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="products.html" class="nav-link">Shop</a>
+                <a href="admin.html" class="nav-link nav-link--active">Admin</a>
+            </div>
+        </div>
+        <div class="nav-actions">
+            <a href="#" class="nav-action" id="adminLogoutBtn" style="display:none;">
+                <span class="action-icon">🚪</span>
+                <span>Logout</span>
+            </a>
+            <a href="login.html" class="nav-action" id="authAction">
+                <span class="action-icon">👤</span>
+                <span>Account</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<!-- Admin Login Screen (shown when not logged in) -->
+<div id="adminLoginScreen">
+    <div class="admin-login">
+        <div class="lock-icon">🔒</div>
+        <h2 style="font-size:26px;font-weight:800;color:var(--c-text);margin-bottom:8px;">Admin Access</h2>
+        <p style="color:var(--c-text-secondary);margin-bottom:24px;">Enter your admin credentials to manage products.</p>
+        <div class="admin-card" style="text-align:left;max-width:380px;margin:0 auto;">
+            <label>Username</label>
+            <input type="text" id="admin-login-username" placeholder="Enter username" autocomplete="off">
+            <label>Password</label>
+            <input type="password" id="admin-login-password" placeholder="Enter password">
+            <button class="admin-btn" onclick="adminLogin()">Login to Admin Panel</button>
+            <p style="text-align:center;font-size:12px;color:#999;margin-top:14px;">Default: username <b>admin</b> / password <b>admin</b></p>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Panel (shown when logged in) -->
+<div id="adminPanel" style="display:none;">
+    <main class="page-shell" style="padding-top:20px;">
+        <section class="section-head page-head">
+            <div>
+                <p class="eyebrow">Admin Panel</p>
+                <h1>Manage Products</h1>
+            </div>
+            <p style="color:var(--c-text-secondary);" id="adminStats"></p>
+        </section>
+
+        <div class="admin-layout">
+            <!-- Add Product Form -->
+            <div class="admin-card">
+                <h2>➕ Add New Product</h2>
+                <p class="sub">Fill in the details below to add a new product to the store.</p>
+
+                <label>Product Images (up to 5)</label>
+                <div class="image-upload-grid" id="imageUploadGrid">
+                    <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 0)"></div>
+                    <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 1)"></div>
+                    <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 2)"></div>
+                    <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 3)"></div>
+                    <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 4)"></div>
+                </div>
+
+                <label>Category</label>
+                <select id="admin-category">
+                    <option value="Skin Care">🧴 Skin Care</option>
+                    <option value="Provisions">🍚 Provisions</option>
+                </select>
+
+                <label>Product Name</label>
+                <input type="text" id="admin-name" placeholder="e.g. Vitamin C Serum" autocomplete="off">
+
+                <label>Description</label>
+                <textarea id="admin-desc" placeholder="Describe the product..."></textarea>
+
+                <label>Price (₦)</label>
+                <input type="number" id="admin-price" placeholder="e.g. 8500" min="1">
+
+                <label>Rating (1–5)</label>
+                <input type="number" id="admin-rating" placeholder="e.g. 4.5" min="1" max="5" step="0.1">
+
+                <div class="admin-checkbox">
+                    <input type="checkbox" id="admin-featured" checked>
+                    <label for="admin-featured" style="margin:0;">⭐ Feature this product</label>
+                </div>
+
+                <button class="admin-btn" onclick="adminAddProductForm()">Add Product</button>
+            </div>
+
+            <!-- Remove / Manage Products -->
+            <div class="admin-card">
+                <h2>🗑️ Manage Products</h2>
+                <p class="sub">Click the delete button to permanently remove a product from the store.</p>
+                <div id="admin-product-list">
+                    <!-- Rendered by JS -->
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<footer class="site-footer">
+    <div class="footer-bottom">
+        <p>© 2026 TriumphsMart. All rights reserved.</p>
+    </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/main.js"></script>
+<script>
+/* ===== Admin page specific logic ===== */
+
+var adminImagePreviews = [null, null, null, null, null];
+
+function adminLogin() {
+    var u = document.getElementById("admin-login-username").value.trim();
+    var p = document.getElementById("admin-login-password").value.trim();
+
+    if (u === ADMIN_USERNAME && p === ADMIN_PASSWORD) {
+        localStorage.setItem("adminLoggedIn", "true");
+        showToast("Welcome Admin! ✅", "success");
+        setTimeout(function () { location.reload(); }, 800);
+    } else {
+        showToast("Invalid admin credentials. Use: admin / admin", "error");
+    }
+}
+
+function previewAdminImage(input, index) {
+    if (!input.files || !input.files[0]) {
+        adminImagePreviews[index] = null;
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+        adminImagePreviews[index] = e.target.result;
+        var slots = document.querySelectorAll(".image-upload-slot");
+        if (slots[index]) {
+            slots[index].innerHTML = '<img src="' + e.target.result + '" alt="Upload">';
+        }
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+function renderAdminProductList() {
+    var container = document.getElementById("admin-product-list");
+    if (!container) return;
+    var products = getProducts();
+    var stats = document.getElementById("adminStats");
+    if (stats) stats.textContent = products.length + " products in store";
+
+    container.innerHTML = "";
+    products.forEach(function (p) {
+        var imgHtml = p.image && (String(p.image).indexOf("data:") === 0 || String(p.image).indexOf("http") === 0)
+            ? '<img src="' + p.image + '" alt="' + p.name + '">'
+            : '<span>' + (p.image || "🛍️") + "</span>";
+        var item = document.createElement("div");
+        item.className = "admin-product-item";
+        item.innerHTML =
+            '<div class="thumb">' + imgHtml + "</div>" +
+            '<div class="info"><h4>' + p.name + '</h4><span class="cat">' + p.category + "</span></div>" +
+            '<div class="price">' + price(p.price) + "</div>" +
+            '<button class="delete-btn" onclick="confirmDeleteProduct(' + p.id + ')">🗑 Delete</button>';
+        container.appendChild(item);
+    });
+}
+
+function confirmDeleteProduct(id) {
+    var product = findProductById(id);
+    if (!product) return;
+    if (confirm('Delete "' + product.name + '" from the store?')) {
+        adminRemoveProduct(id);
+        showToast('"' + product.name + '" removed from store', "success");
+        setTimeout(function () { location.reload(); }, 800);
+    }
+}
+
+/* Override add form to accept gallery images */
+function adminAddProductForm() {
+    var name = document.getElementById("admin-name").value.trim();
+    var category = document.getElementById("admin-category").value;
+    var price = parseFloat(document.getElementById("admin-price").value);
+    var rating = parseFloat(document.getElementById("admin-rating").value);
+    var description = document.getElementById("admin-desc").value.trim();
+    var featured = document.getElementById("admin-featured").checked;
+
+    if (!name || !price || !description) {
+        showToast("Please fill in name, price, and description", "error");
+        return;
+    }
+    if (isNaN(price) || price <= 0) { showToast("Please enter a valid price", "error"); return; }
+
+    // Collect the 5 image previews
+    var images = adminImagePreviews.filter(function (img) { return img !== null; });
+
+    var product = {
+        name: name,
+        category: category,
+        price: price,
+        rating: rating || 4.5,
+        description: description,
+        image: images[0] || "🛍️",
+        gallery: images,
+        featured: featured
+    };
+    adminAddProduct(product);
+    showToast('Product "' + name + '" added successfully!', "success");
+    setTimeout(function () { location.reload(); }, 1200);
+}
+
+/* Init */
+window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+
+    var loggedIn = isAdminLoggedIn();
+    var loginScreen = document.getElementById("adminLoginScreen");
+    var panel = document.getElementById("adminPanel");
+    var logoutBtn = document.getElementById("adminLogoutBtn");
+
+    if (loggedIn) {
+        loginScreen.style.display = "none";
+        panel.style.display = "block";
+        if (logoutBtn) logoutBtn.style.display = "inline-flex";
+        logoutBtn.onclick = function (e) {
+            e.preventDefault();
+            adminLogout();
+        };
+        renderAdminProductList();
+    } else {
+        loginScreen.style.display = "block";
+        panel.style.display = "none";
+    }
+});
+</script>
+</body>
+</html>

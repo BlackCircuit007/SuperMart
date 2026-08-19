@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Dashboard — TriumphsMart</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .dash-layout {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 24px;
+            padding: 28px 4%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .dash-sidebar {
+            background: var(--c-card-bg);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            box-shadow: var(--c-shadow);
+            padding: 20px;
+            height: fit-content;
+        }
+        body.dark-mode .dash-sidebar {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+        }
+        .dash-profile {
+            text-align: center;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--c-border);
+            margin-bottom: 16px;
+        }
+        .dash-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--c-primary);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            font-weight: 800;
+            margin: 0 auto 10px;
+            overflow: hidden;
+        }
+        .dash-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .dash-profile h3 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--c-text);
+            margin: 0;
+        }
+        body.dark-mode .dash-profile h3 { color: var(--c-dark-text); }
+        .dash-profile p {
+            font-size: 13px;
+            color: var(--c-text-secondary);
+            margin: 4px 0 0;
+            word-break: break-all;
+        }
+        .dash-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .dash-nav a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 14px;
+            border-radius: 10px;
+            color: var(--c-text);
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        body.dark-mode .dash-nav a { color: var(--c-dark-text); }
+        .dash-nav a:hover,
+        .dash-nav a.active {
+            background: rgba(252, 104, 63, 0.1);
+            color: var(--c-primary);
+        }
+        .dash-content {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .dash-card {
+            background: var(--c-card-bg);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            box-shadow: var(--c-shadow);
+            padding: 22px;
+        }
+        body.dark-mode .dash-card {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+        }
+        .dash-card h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--c-text);
+            margin: 0 0 14px;
+        }
+        body.dark-mode .dash-card h2 { color: var(--c-dark-text); }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+        .stat-box {
+            background: linear-gradient(135deg, #fff0e6 0%, #ffe6db 100%);
+            border: 1px solid #fdd5cc;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+        }
+        body.dark-mode .stat-box {
+            background: linear-gradient(135deg, #2a1a12 0%, #3a2216 100%);
+            border-color: #4a2a1a;
+        }
+        .stat-box .num {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--c-primary);
+        }
+        .stat-box .label {
+            font-size: 13px;
+            color: var(--c-text-secondary);
+            margin-top: 4px;
+        }
+        .dash-order-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            border: 1px solid var(--c-border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+        body.dark-mode .dash-order-item {
+            background: #2a2a2a;
+            border-color: var(--c-dark-border);
+        }
+        .dash-order-item .order-ref {
+            font-weight: 700;
+            color: var(--c-text);
+            font-size: 14px;
+        }
+        body.dark-mode .dash-order-item .order-ref { color: var(--c-dark-text); }
+        .dash-order-item .order-date {
+            font-size: 12px;
+            color: var(--c-text-secondary);
+        }
+        .dash-order-item .order-total {
+            font-weight: 800;
+            color: var(--c-primary);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: var(--c-text-secondary);
+        }
+        .empty-state .big { font-size: 48px; margin-bottom: 10px; }
+        .upload-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f5f7f9;
+            border: 1px solid var(--c-border);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--c-text);
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        body.dark-mode .upload-badge {
+            background: #2a2a2a;
+            border-color: var(--c-dark-border);
+            color: var(--c-dark-text);
+        }
+        @media (max-width: 900px) {
+            .dash-layout { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .dash-order-item { flex-direction: column; gap: 6px; text-align: center; }
+            .dash-layout { padding: 18px 3%; }
+            .dash-sidebar { padding: 16px; }
+        }
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+            .dash-card { padding: 18px; }
+            .dash-nav a { padding: 10px 12px; }
+            .dash-avatar { width: 70px; height: 70px; font-size: 26px; }
+        }
+        @media (max-width: 375px) {
+            .dash-layout { padding: 14px 3%; }
+            .dash-card { padding: 14px; }
+            .dash-card h2 { font-size: 16px; }
+            .dash-profile h3 { font-size: 14px; }
+            .stat-box { padding: 14px; }
+            .stat-box .num { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Top utility bar -->
+<div class="topbar">
+    <div class="topbar-left">
+        <a href="index.html">🏠 Home</a>
+        <a href="products.html">Shop</a>
+        <a href="cart.html">Cart</a>
+    </div>
+    <a href="#" class="flag">👤 My Account</a>
+</div>
+
+<header class="navbar">
+    <div class="nav-row">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <a href="index.html" class="brand"><span class="brand-mark">🛍️</span><span>TriumphsMart</span></a>
+            <div class="nav-links" id="navLinks">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="products.html" class="nav-link">Shop</a>
+                <a href="cart.html" class="nav-link">Cart</a>
+            </div>
+        </div>
+        <div class="nav-actions">
+            <a href="cart.html" class="nav-action">
+                <span class="action-icon">🛒</span>
+                <span>Cart</span>
+                <span class="badge" id="cart-count">0</span>
+            </a>
+            <a href="#" class="nav-action" id="dashLogoutBtn">
+                <span class="action-icon">🚪</span>
+                <span>Logout</span>
+            </a>
+            <button class="category-btn mobile-nav" id="menuToggle" style="background:#f0f2f5;color:#212121;">
+                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Mobile overlay -->
+<div class="mobile-overlay" id="mobileOverlay"></div>
+
+<!-- Mobile sliding menu -->
+<nav class="mobile-menu" id="mobileMenu">
+    <button class="close-menu" id="closeMenu">&times;</button>
+    <div class="mobile-nav-links" id="mobileNavLinks">
+        <a href="index.html">Home</a>
+        <a href="products.html">Shop</a>
+        <a href="cart.html">Cart</a>
+        <a href="login.html" id="mobileLoginLink">Login</a>
+    </div>
+</nav>
+
+<!-- Dashboard (only shown when logged in) -->
+<div id="dashApp">
+    <main class="dash-layout">
+        <aside class="dash-sidebar">
+            <div class="dash-profile">
+                <div class="dash-avatar" id="dashAvatar">U</div>
+                <h3 id="dashName">User</h3>
+                <p id="dashEmail">user@email.com</p>
+                <label class="upload-badge">
+                    📷 Change Photo
+                    <input type="file" accept="image/*" style="display:none;" onchange="uploadProfilePicture(this)">
+                </label>
+            </div>
+            <nav class="dash-nav">
+                <a href="#" class="active" data-tab="overview">📊 Overview</a>
+                <a href="#" data-tab="orders">📦 My Orders</a>
+                <a href="cart.html">🛒 My Cart</a>
+                <a href="products.html">🛍️ Continue Shopping</a>
+                <a href="index.html">🏠 Home</a>
+                <a href="#" id="dashLogoutSide">🚪 Logout</a>
+            </nav>
+        </aside>
+
+        <div class="dash-content">
+            <!-- Overview Tab -->
+            <div id="tab-overview">
+                <div class="dash-card">
+                    <h2>Welcome back, <span id="welcomeName">Friend</span>! 👋</h2>
+                    <p style="color:var(--c-text-secondary);font-size:14px;">Here's what's happening with your account.</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="num" id="statCartItems">0</div>
+                        <div class="label">Items in Cart</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="num" id="statOrders">0</div>
+                        <div class="label">Orders Placed</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="num" id="statSaved">₦0</div>
+                        <div class="label">Cart Value</div>
+                    </div>
+                </div>
+
+                <div class="dash-card">
+                    <h2>🛒 Your Cart Items</h2>
+                    <div id="dashCartList"></div>
+                </div>
+            </div>
+
+            <!-- Orders Tab -->
+            <div id="tab-orders" style="display:none;">
+                <div class="dash-card">
+                    <h2>📦 My Orders</h2>
+                    <div id="dashOrdersList"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Not logged in state -->
+<div id="notLoggedIn" style="display:none;">
+    <main class="page-shell" style="text-align:center;padding-top:80px;">
+        <div style="font-size:64px;margin-bottom:16px;">🔒</div>
+        <h1 style="font-size:26px;font-weight:800;color:var(--c-text);">Please Login to view your dashboard</h1>
+        <p style="color:var(--c-text-secondary);margin:12px 0 24px;">You need to be logged in to see your account, orders and cart.</p>
+        <div class="hero-actions" style="justify-content:center;">
+            <a href="login.html" class="primary-btn" style="background:var(--c-primary);color:#fff;">Login</a>
+            <a href="register.html" class="secondary-btn" style="background:#f5f7f9;color:var(--c-text);border:1px solid var(--c-border);">Create Account</a>
+        </div>
+    </main>
+</div>
+
+<footer class="site-footer">
+    <div class="footer-bottom">
+        <p>© 2026 TriumphsMart. All rights reserved.</p>
+    </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/main.js"></script>
+<script>
+/* ===== Dashboard specific logic ===== */
+
+function renderDashboard() {
+    var user = getCurrentUser();
+    if (!user) {
+        document.getElementById("dashApp").style.display = "none";
+        document.getElementById("notLoggedIn").style.display = "block";
+        return;
+    }
+
+    document.getElementById("dashApp").style.display = "block";
+    document.getElementById("notLoggedIn").style.display = "none";
+
+    // Profile info
+    document.getElementById("dashName").textContent = user.name;
+    document.getElementById("dashEmail").textContent = user.email;
+    document.getElementById("welcomeName").textContent = user.name.split(" ")[0];
+
+    var avatar = document.getElementById("dashAvatar");
+    if (user.profilePic && user.profilePic.image) {
+        avatar.innerHTML = '<img src="' + user.profilePic.image + '" alt="Profile">';
+    } else {
+        avatar.textContent = (user.profilePic && user.profilePic.initials) || "U";
+        avatar.style.background = (user.profilePic && user.profilePic.color) || "#ff3b20";
+    }
+
+    // Cart stats
+    var key = "cart_" + user.email;
+    var cart = JSON.parse(localStorage.getItem(key)) || [];
+    var totalItems = cart.reduce(function (s, i) { return s + i.quantity; }, 0);
+    var totalValue = cart.reduce(function (s, i) { return s + (i.price * i.quantity); }, 0);
+
+    document.getElementById("statCartItems").textContent = totalItems;
+    document.getElementById("statSaved").textContent = "₦" + totalValue.toLocaleString();
+
+    // Cart list
+    var cartList = document.getElementById("dashCartList");
+    if (cart.length === 0) {
+        cartList.innerHTML = '<div class="empty-state"><div class="big">🛒</div><p>Your cart is empty. Start shopping!</p><a href="products.html" class="primary-btn" style="background:var(--c-primary);color:#fff;display:inline-block;margin-top:12px;">Shop Now</a></div>';
+    } else {
+        cartList.innerHTML = "";
+        cart.forEach(function (item) {
+            var div = document.createElement("div");
+            div.className = "dash-order-item";
+            div.innerHTML =
+                '<div><div class="order-ref">' + item.name + '</div><div class="order-date">Qty: ' + item.quantity + '</div></div>' +
+                '<div class="order-total">₦' + (item.price * item.quantity).toLocaleString() + '</div>';
+            cartList.appendChild(div);
+        });
+    }
+
+    // Orders
+    var ordersKey = "orders_" + user.email;
+    var orders = JSON.parse(localStorage.getItem(ordersKey)) || [];
+    document.getElementById("statOrders").textContent = orders.length;
+
+    var ordersList = document.getElementById("dashOrdersList");
+    if (orders.length === 0) {
+        ordersList.innerHTML = '<div class="empty-state"><div class="big">📦</div><p>You haven\'t placed any orders yet.</p></div>';
+    } else {
+        ordersList.innerHTML = "";
+        orders.forEach(function (order) {
+            var div = document.createElement("div");
+            div.className = "dash-order-item";
+            div.innerHTML =
+                '<div><div class="order-ref">' + order.ref + '</div><div class="order-date">' + order.date + '</div></div>' +
+                '<div class="order-total">₦' + Number(order.total).toLocaleString() + '</div>';
+            ordersList.appendChild(div);
+        });
+    }
+}
+
+/* Tab switching */
+function setupTabs() {
+    document.querySelectorAll(".dash-nav a[data-tab]").forEach(function (link) {
+        link.addEventListener("click", function (e) {
+            e.preventDefault();
+            var tab = this.dataset.tab;
+            document.querySelectorAll(".dash-nav a").forEach(function (a) { a.classList.remove("active"); });
+            this.classList.add("active");
+            document.getElementById("tab-overview").style.display = tab === "overview" ? "block" : "none";
+            document.getElementById("tab-orders").style.display = tab === "orders" ? "block" : "none";
+        });
+    });
+}
+
+/* Init */
+window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+    setupTabs();
+    renderDashboard();
+
+    var logoutBtn = document.getElementById("dashLogoutBtn");
+    if (logoutBtn) {
+        logoutBtn.onclick = function (e) {
+            e.preventDefault();
+            logout();
+        };
+    }
+    var logoutSide = document.getElementById("dashLogoutSide");
+    if (logoutSide) {
+        logoutSide.onclick = function (e) {
+            e.preventDefault();
+            logout();
+        };
+    }
+});
+</script>
+</body>
+</html>

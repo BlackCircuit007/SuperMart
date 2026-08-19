@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FreshMart</title>
+    <title>TriumphsMart — Skin Care & Provisions</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -24,36 +24,26 @@
     <div class="nav-row">
         <!-- Brand + category dropdown -->
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="index.html" class="brand"><span class="brand-mark">🛒</span><span>FreshMart</span></a>
-            <!-- <button class="category-btn" id="categoryBtn">
+            <a href="index.html" class="brand"><span class="brand-mark">🛍️</span><span>TriumphsMart</span></a>
+            <button class="category-btn" id="categoryBtn">
                 <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
                 <span>Categories</span>
-            </button> -->
+            </button>
 
-            <!-- Category dropdown -->
-            <!-- <div class="category-dropdown" id="categoryDropdown">
-                <a href="#" class="cat-item"><span class="cat-icon">🥫</span> Pantry Staples</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥩</span> Fresh Meat</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥬</span> Vegetables</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🧁</span> Bakery</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥛</span> Dairy</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🍚</span> Grains</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥤</span> Drinks</a>
-            </div> -->
+            <!-- Category dropdown (populated by JS) -->
+            <div class="category-dropdown" id="categoryDropdown"></div>
 
             <!-- Desktop nav links -->
             <div class="nav-links" id="navLinks">
                 <a href="index.html" class="nav-link nav-link--active">Home</a>
                 <a href="products.html" class="nav-link">Shop</a>
-                <!-- <a href="products.html#deals" class="nav-link">Deals</a> -->
-                <!-- <a href="products.html#flash" class="nav-link">Flash Sale</a>   -->
-                <!-- <a href="products.html#new" class="nav-link">New Arrivals</a> -->
+                <a href="products.html#deals" class="nav-link">Deals</a>
             </div>
         </div>
 
         <!-- Central search -->
         <div class="search-bar">
-            <input type="text" id="home-search" placeholder="Search groceries, drinks, snacks, bakery..." autocomplete="off">
+            <input type="text" id="home-search" placeholder="Search skin care, provisions, groceries..." autocomplete="off">
             <button type="button" class="search-btn" onclick="filterCards('home-search','featured-products')">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="2" fill="none"></circle><line x1="15" y1="15" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
             </button>
@@ -62,14 +52,6 @@
 
         <!-- Right action icons + profile -->
         <div class="nav-actions">
-            <!-- <a href="cart.html" class="nav-action">
-                <span class="action-icon">💬</span>
-                <span>Messages</span>
-            </a> -->
-            <!-- <a href="products.html" class="nav-action">
-                <span class="action-icon">❤️</span>
-                <span>Wishlist</span>
-            </a> -->
             <a href="cart.html" class="nav-action">
                 <span class="action-icon">🛒</span>
                 <span>Cart</span>
@@ -80,7 +62,7 @@
                 <span>Account</span>
             </a>
             <button class="signup-btn" id="signupBtn" onclick="window.location='register.html'">Sign Up</button>
-            
+
             <!-- Mobile hamburger -->
             <button class="category-btn mobile-nav" id="menuToggle" style="background:#f0f2f5;color:#212121;">
                 <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
@@ -89,6 +71,9 @@
     </div>
 </header>
 
+<!-- Mobile overlay -->
+<div class="mobile-overlay" id="mobileOverlay"></div>
+
 <!-- Mobile sliding menu -->
 <nav class="mobile-menu" id="mobileMenu">
     <button class="close-menu" id="closeMenu">&times;</button>
@@ -96,9 +81,8 @@
         <a href="index.html">Home</a>
         <a href="products.html">Shop</a>
         <a href="products.html#deals">Deals</a>
-        <a href="products.html#flash">Flash Sale</a>
         <a href="cart.html">Cart</a>
-        <a href="login.html" id="mobileLoginLink">Login</a>
+        <a href="dashboard.html" id="mobileLoginLink">Login</a>
     </div>
 </nav>
 
@@ -106,81 +90,30 @@
     <!-- Hero -->
     <section class="hero">
         <div class="hero-content">
-            <p class="eyebrow">One-stop supermarket</p>
-            <h1>Fresh groceries, everyday essentials, and bakery favorites in one place.</h1>
-            <p>Stock up on pantry staples, chilled drinks, snacks, and premium treats with fast checkout and easy pickup.</p>
+            <p class="eyebrow">Beauty & Essentials</p>
+            <h1>Premium skin care and everyday provisions in one place.</h1>
+            <p>Glow with top skin care brands and stock up on quality provisions — all delivered to your door.</p>
             <div class="hero-actions">
                 <a href="products.html" class="primary-btn">Start Shopping</a>
-                <a href="products.html" class="secondary-btn">Browse Deals</a>
+                <a href="products.html#skin-care" class="secondary-btn">Shop Skin Care</a>
             </div>
         </div>
     </section>
 
-    <!-- Flash Deals -->
-    <!-- <section class="section" id="flash">
-        <div class="section-head">
-            <h2>Flash Deals</h2>
-            <div class="countdown" id="countdown-timer">⏰ 02:00:00</div>
-        </div>
-
-        <div class="flash-deals">
-            <div class="flash-header">
-                <span class="flash-icon">⚡</span>
-                <h3>Deals of the Day</h3>
-            </div>
-            <div class="flash-grid">
-                <div class="flash-card">
-                    <div class="fc-icon">🎂</div>
-                    <h4>Chocolate Cake</h4>
-                    <div class="fc-price">₦18,000</div>
-                    <div class="fc-sub">45% off today</div>
-                </div>
-                <div class="flash-card">
-                    <div class="fc-icon">🍩</div>
-                    <h4>Puff Puff</h4>
-                    <div class="fc-price">₦2,000</div>
-                    <div class="fc-sub">Buy 1 get 1 free</div>
-                </div>
-                <div class="flash-card">
-                    <div class="fc-icon">🍚</div>
-                    <h4>Rice Bag</h4>
-                    <div class="fc-price">₦18,500</div>
-                    <div class="fc-sub">50kg family pack</div>
-                </div>
-                <div class="flash-card">
-                    <div class="fc-icon">🥛</div>
-                    <h4>Fresh Milk</h4>
-                    <div class="fc-price">₦2,500</div>
-                    <div class="fc-sub">2L bottle</div>
-                </div>
-                <div class="flash-card">
-                    <div class="fc-icon">🥐</div>
-                    <h4>Butter Buns</h4>
-                    <div class="fc-price">₦1,500</div>
-                    <div class="fc-sub">Freshly baked</div>
-                </div>
-            </div>
-        </div>
-    </section> -->
-
     <!-- Categories -->
-    <!-- <section class="section categories">
+    <section class="section categories">
         <div class="section-head">
             <div>
                 <h2>Shop by category</h2>
-                <p>Everything your household needs, from breakfast to dinner.</p>
+                <p>Everything your skin and pantry needs.</p>
             </div>
             <a href="products.html" class="nav-link">View all</a>
         </div>
         <div class="category-grid">
-            <div class="category-tile"><span class="cat-icon">🥫</span><span class="cat-name">Pantry</span></div>
-            <div class="category-tile"><span class="cat-icon">🥩</span><span class="cat-name">Fresh Meat</span></div>
-            <div class="category-tile"><span class="cat-icon">🥬</span><span class="cat-name">Vegetables</span></div>
-            <div class="category-tile"><span class="cat-icon">🧁</span><span class="cat-name">Bakery</span></div>
-            <div class="category-tile"><span class="cat-icon">🥛</span><span class="cat-name">Dairy</span></div>
-            <div class="category-tile"><span class="cat-icon">🍚</span><span class="cat-name">Grains</span></div>
+            <div class="category-tile" data-category="Skin Care"><span class="cat-icon">🧴</span><span class="cat-name">Skin Care</span></div>
+            <div class="category-tile" data-category="Provisions"><span class="cat-icon">🍚</span><span class="cat-name">Provisions</span></div>
         </div>
-    </section> -->
+    </section>
 
     <!-- Featured products -->
     <section class="section featured" id="featured">
@@ -192,152 +125,62 @@
             <a href="products.html" class="nav-link">See all</a>
         </div>
         <div class="product-grid" id="featured-products">
-            <div class="card" data-search="chocolate cake dessert sweet celebration">
-                <div class="card-image">
-                    <!-- <span class="card-badge diamond">-20%</span> -->
-                    <!-- <span class="card-badge free-shipping">🚚</span> -->
-                    <span class="card-icon">🎂</span>
-                </div>
-                <div class="card-body">
-                    <h3>Chocolate Cake</h3>
-                    <p>Rich chocolate layers for parties and celebrations.</p>
-                    <div class="card-meta">
-                        <span class="card-rating"><span class="star">★</span> 4.8</span>
-                    </div>
-                    <div class="price-row">
-                        <span class="price">₦18,000</span>
-                        <!-- <span class="price-discount">₦22,500</span> -->
-                    </div>
-                    <button onclick="addToCart(1,'Chocolate Cake',18000)">Add to Cart</button>
-                </div>
-            </div>
-            <div class="card" data-search="butter buns bakery breakfast snack">
-                <div class="card-image">
-                    <!-- <span class="card-badge diamond">-12%</span> -->
-                    <span class="card-icon">🥐</span>
-                </div>
-                <div class="card-body">
-                    <h3>Butter Buns</h3>
-                    <p>Soft and fluffy buns perfect for breakfast or tea time.</p>
-                    <div class="card-meta">
-                        <span class="card-rating"><span class="star">★</span> 4.5 </span>
-                    </div>
-                    <div class="price-row">
-                        <span class="price">₦1,500</span>
-                        <!-- <span class="price-discount">₦1,700</span> -->
-                    </div>
-                    <button onclick="addToCart(2,'Butter Buns',1500)">Add to Cart</button>
-                </div>
-            </div>
-            <div class="card" data-search="puff puff snack fried sweet">
-                <div class="card-image">
-                    <!-- <span class="card-badge diamond">-25%</span> -->
-                    <!-- <span class="card-badge free-shipping">🚚</span> -->
-                    <span class="card-icon">🍩</span>
-                </div>
-                <div class="card-body">
-                    <h3>Puff Puff</h3>
-                    <p>Golden bite-sized dough balls that are quick and satisfying.</p>
-                    <div class="card-meta">
-                        <span class="card-rating"><span class="star">★</span> 4.3 </span>
-                    </div>
-                    <div class="price-row">
-                        <span class="price">₦2,000</span>
-                        <!-- <span class="price-discount">₦2,670</span> -->
-                    </div>
-                    <button onclick="addToCart(3,'Puff Puff',2000)">Add to Cart</button>
-                </div>
-            </div>
-            <div class="card" data-search="milk drink breakfast fresh">
-                <div class="card-image">
-                    <!-- <span class="card-badge free-shipping">🚚</span>    -->
-                    <span class="card-icon">🥛</span>
-                </div>
-                <div class="card-body">
-                    <h3>Fresh Milk</h3>
-                    <p>Daily dairy staple for your breakfast table and recipes.</p>
-                    <div class="card-meta">
-                        <span class="card-rating"><span class="star">★</span> 4.6 </span>
-                    </div>
-                    <div class="price-row">
-                        <span class="price">₦2,500</span>
-                    </div>
-                    <button onclick="addToCart(4,'Fresh Milk',2500)">Add to Cart</button>
-                </div>
-            </div>
-            <div class="card" data-search="rice grain staple grocery pantry">
-                <div class="card-image">
-                    <!-- <span class="card-badge diamond">-15%</span> -->
-                    <!-- <span class="card-badge free-shipping">🚚</span> -->
-                    <span class="card-icon">🍚</span>
-                </div>
-                <div class="card-body">
-                    <h3>Rice Bag</h3>
-                    <p>Premium long grain rice for everyday family meals.</p>
-                    <div class="card-meta">
-                        <span class="card-rating"><span class="star">★</span> 4.7 </span>
-                    </div>
-                    <div class="price-row">
-                        <span class="price">₦18,500</span>
-                        <!-- <span class="price-discount">₦21,765</span> -->
-                    </div>
-                    <button onclick="addToCart(5,'Rice Bag',18500)">Add to Cart</button>
-                </div>
-            </div>
-            <div class="card" data-search="water drink bottle refreshment">
-                <div class="card-image">
-                    <!-- <span class="card-badge diamond">-30%</span> -->
-                    <span class="card-icon">💧</span>
-                </div>
-                <div class="card-body">
-                    <h3>Water Pack</h3>
-                    <p>Refreshing bottled water for the home, office, and trips.</p>
-                    <div class="card-meta">
-                        <span class="card-rating"><span class="star">★</span> 4.4</span>
-                    </div>
-                    <div class="price-row">
-                        <span class="price">₦1,200</span>
-                        <!-- <span class="price-discount">₦1,710</span> -->
-                    </div>
-                    <button onclick="addToCart(6,'Water Pack',1200)">Add to Cart</button>
-                </div>
-            </div>
+            <!-- Rendered dynamically by JS -->
         </div>
     </section>
 
     <!-- Promo banner -->
     <section class="section">
         <div class="info-banner">
-            <h3>Big supermarket selection</h3>
-            <p>From fresh produce to pantry essentials, we bring everyday shopping to a smoother, faster experience. Free delivery on orders above ₦25,000.</p>
+            <h3>💎 Top-quality products</h3>
+            <p>From premium skin care essentials to trusted pantry staples, we bring you authentic, quality products at the best prices. Free delivery on orders above ₦50,000.</p>
         </div>
     </section>
 </main>
+
+<!-- Quick View Modal -->
+<div class="quickview-overlay" id="quickviewOverlay">
+    <div class="quickview-modal">
+        <button class="quickview-close" onclick="closeQuickView()">&times;</button>
+        <div class="quickview-body" id="quickviewBody">
+            <div class="qv-image" id="qvImage">🛍️</div>
+            <div class="qv-details">
+                <h3 id="qvTitle">Product Name</h3>
+                <div class="qv-price">
+                    <span id="qvPrice">₦0</span>
+                </div>
+                <div class="qv-rating" id="qvRating">★ 0</div>
+                <p class="qv-desc" id="qvDesc">Product description will appear here.</p>
+                <div class="qv-actions">
+                    <button class="primary-btn" style="flex:1;background:var(--c-primary);color:#fff;" onclick="quickViewAddToCart()">Add to Cart</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Footer -->
 <footer class="site-footer">
     <div class="footer-grid">
         <div>
-            <h4>FreshMart</h4>
-            <p style="color:#888;font-size:12px;line-height:1.6;">One-stop supermarket delivering fresh groceries and everyday essentials to your door.</p>
+            <h4>TriumphsMart</h4>
+            <p style="color:#888;font-size:12px;line-height:1.6;">Premium skin care and quality provisions delivered to your door.</p>
         </div>
         <div>
             <h4>Customer Service</h4>
             <ul>
                 <li><a href="#">Help Center</a></li>
                 <li><a href="#">Contact Us</a></li>
-                <li><a href="#">How to Order</a></li>
+                <li><a href="checkout.html">How to Order</a></li>
                 <li><a href="#">Shipping & Returns</a></li>
             </ul>
         </div>
         <div>
             <h4>Shop</h4>
             <ul>
-                <li><a href="#">Pantry</a></li>
-                <li><a href="#">Fresh Meat</a></li>
-                <li><a href="#">Vegetables</a></li>
-                <li><a href="#">Bakery</a></li>
-                <li><a href="#">Dairy</a></li>
+                <li><a href="products.html#skin-care">Skin Care</a></li>
+                <li><a href="products.html#provisions">Provisions</a></li>
+                <li><a href="admin.html" style="color:#666;">Admin</a></li>
             </ul>
         </div>
         <div>
@@ -353,19 +196,18 @@
             <h4>About</h4>
             <ul>
                 <li><a href="#">Our Story</a></li>
-                <li><a href="#">Terms</a></li>
-                <li><a href="#">Privacy</a></li>
-                <li><a href="#">Careers</a></li>
+                <li><a href="login.html">Login</a></li>
+                <li><a href="register.html">Register</a></li>
             </ul>
         </div>
     </div>
     <div class="footer-bottom">
-        <p>© 2026 FreshMart Supermarket. All rights reserved.</p>
+        <p>© 2026 TriumphsMart. All rights reserved.</p>
     </div>
 </footer>
 
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
 <script src="js/main.js"></script>
-<script src="js/profile.js"></script>
-<script src="../c.js"></script>
 </body>
 </html>

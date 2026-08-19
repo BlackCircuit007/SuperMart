@@ -3,212 +3,123 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Cart — FreshMart</title>
+    <title>Cart - TriumphsMart</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
         .cart-layout {
             display: grid;
             grid-template-columns: 2fr 1fr;
             gap: 24px;
-            padding: 28px 8%;
+            padding: 28px 4%;
+            max-width: 1400px;
+            margin: 0 auto;
         }
-        .cart-list {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
+        .cart-list { display: flex; flex-direction: column; gap: 16px; }
         .cart-item {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            background: var(--c_card_bg);
-            border: 1px solid var(--c_border);
+            display: flex; align-items: center; gap: 16px;
+            background: var(--c-card-bg);
+            border: 1px solid var(--c-border);
             border-radius: 14px;
             padding: 16px;
-            box-shadow: var(--c_shadow);
+            box-shadow: var(--c-shadow);
+        }
+        body.dark-mode .cart-item {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
         }
         .cart-item .item-img {
-            width: 90px;
-            height: 90px;
-            border-radius: 10px;
+            width: 90px; height: 90px; border-radius: 10px;
             background: linear-gradient(135deg, #f5f7fa 0%, #e9eef2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 34px;
-            min-width: 90px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 34px; min-width: 90px; overflow: hidden;
         }
-        .cart-item .item-body {
-            flex: 1;
-        }
+        .cart-item .item-img img { width: 100%; height: 100%; object-fit: cover; }
+        .cart-item .item-body { flex: 1; }
         .cart-item .item-body h3 {
-            font-size: 15px;
-            font-weight: 700;
-            margin: 0 0 6px;
-            color: var(--c_text);
+            font-size: 15px; font-weight: 700; margin: 0 0 6px; color: var(--c-text);
         }
+        body.dark-mode .cart-item .item-body h3 { color: var(--c-dark-text); }
         .cart-item .item-price {
-            font-size: 16px;
-            font-weight: 800;
-            color: var(--c_primary);
-            margin: 4px 0;
-        }
-        .cart-item .item-discount {
-            text-decoration: line-through;
-            color: var(--c_text_secondary);
-            font-size: 13px;
+            font-size: 16px; font-weight: 800; color: var(--c-primary); margin: 4px 0;
         }
         .cart-item .qty-control {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: #f5f7f9;
-            border-radius: 999px;
-            padding: 4px 8px;
-            margin-top: 6px;
-            font-size: 13px;
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #f5f7f9; border-radius: 999px;
+            padding: 4px 8px; margin-top: 6px; font-size: 13px;
         }
+        body.dark-mode .cart-item .qty-control { background: #2a2a2a; }
         .cart-item .qty-control button {
-            border: none;
-            background: none;
-            cursor: pointer;
-            font-size: 16px;
-            color: var(--c_text_secondary);
+            border: none; background: none; cursor: pointer;
+            font-size: 16px; color: var(--c-text-secondary); padding: 0 4px;
         }
         .cart-item .remove-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            color: var(--c_primary);
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 6px;
-        }
-        .cart-item .remove-btn:hover {
-            text-decoration: underline;
+            display: inline-flex; align-items: center; gap: 4px;
+            color: var(--c-primary); font-size: 12px; font-weight: 600;
+            cursor: pointer; margin-top: 6px;
         }
         .cart-summary {
-            background: var(--c_card_bg);
-            border: 1px solid var(--c_border);
-            border-radius: 16px;
-            padding: 22px;
-            box-shadow: var(--c_shadow);
-            height: fit;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+            background: var(--c-card-bg);
+            border: 1px solid var(--c-border);
+            border-radius: 16px; padding: 22px;
+            box-shadow: var(--c-shadow);
+            display: flex; flex-direction: column; gap: 12px;
+            height: fit-content;
         }
-        .cart-summary h3 {
-            font-size: 16px;
-            font-weight: 700;
-            margin: 0;
-            color: var(--c_text);
+        body.dark-mode .cart-summary {
+            background: var(--c-dark-card-bg); border-color: var(--c-dark-border);
         }
+        .cart-summary h3 { font-size: 16px; font-weight: 700; margin: 0; color: var(--c-text); }
+        body.dark-mode .cart-summary h3 { color: var(--c-dark-text); }
         .summary-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
-            color: var(--c_text_secondary);
+            display: flex; justify-content: space-between;
+            font-size: 14px; color: var(--c-text-secondary);
         }
-        .summary-row b {
-            color: var(--c_text);
-            font-weight: 700;
-        }
+        .summary-row b { color: var(--c-text); font-weight: 700; }
         .checkout-btn {
-            width: 100%;
-            background: var(--c_primary);
-            color: #fff;
-            border: none;
-            border-radius: 26px;
-            padding: 13px 16px;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: background 0.2s, transform 0.2s;
-            margin-top: 10px;
+            width: 100%; background: var(--c-primary); color: #fff;
+            border: none; border-radius: 26px; padding: 13px 16px;
+            font-size: 16px; font-weight: 700; cursor: pointer;
+            transition: background 0.2s, transform 0.2s; margin-top: 10px;
         }
-        .checkout-btn:hover {
-            background: var(--c_primary_dark);
-            transform: translateY(-1px);
-        }
-        .empty-cart {
-            text-align: center;
-            padding: 50px;
-            color: var(--c_text_secondary);
-        }
-        .empty-cart .big {
-            font-size: 60px;
-            margin-bottom: 12px;
-        }
-        @media (max-width: 900px) {
-            .cart-layout { grid-template-columns: 1fr; }
-        }
-        @media (max-width: 768px) {
+        .checkout-btn:hover { background: var(--c-primary-dark); transform: translateY(-1px); }
+        .empty-cart { text-align: center; padding: 50px; color: var(--c-text-secondary); }
+        .empty-cart .big { font-size: 60px; margin-bottom: 12px; }
+        @media (max-width: 900px) { .cart-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 600px) {
+            .cart-item { flex-direction: column; text-align: center; gap: 10px; }
             .cart-layout { padding: 20px 4%; }
-            .cart-item { padding: 12px; }
         }
     </style>
 </head>
 <body>
 
-<!-- Top utility bar -->
 <div class="topbar">
     <div class="topbar-left">
-        <a href="#" class="flag">🇦 &nbsp; English</a>
+        <a href="#" class="flag">EN English</a>
         <a href="index.html">Home</a>
         <a href="products.html">Shop</a>
     </div>
-    <a href="#" class="flag">🌐 EN</a>
+    <a href="#" class="flag">EN</a>
 </div>
 
 <header class="navbar">
     <div class="nav-row">
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="index.html" class="brand"><span class="brand-mark">🛒</span><span>FreshMart</span></a>
-            <!-- <button class="category-btn" id="categoryBtn">
-                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
-                <span>Categories</span>
-            </button>
-
-            <div class="category-dropdown" id="categoryDropdown">
-                <a href="#" class="cat-item"><span class="cat-icon">🥫</span> Pantry Staples</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥩</span> Fresh Meat</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥬</span> Vegetables</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🧁</span> Bakery</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥛</span> Dairy</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🍚</span> Grains</a>
-                <a href="#" class="cat-item"><span class="cat-icon">🥤</span> Drinks</a>
-            </div> -->
-
+            <a href="index.html" class="brand"><span class="brand-mark">SHOP</span><span>TriumphsMart</span></a>
             <div class="nav-links" id="navLinks">
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="products.html" class="nav-link">Shop</a>
-                <!-- <a href="products.html#deals" class="nav-link">Deals</a>
-                <a href="products.html#flash" class="nav-link">Flash Sale</a> -->
-                <a href="#" class="nav-link nav-link--active">Cart</a>
+                <a href="cart.html" class="nav-link nav-link--active">Cart</a>
             </div>
         </div>
-
-        <div class="search-bar" style="max-width:480px;">
-            <input type="text" id="cart-search" placeholder="Search in cart..." autocomplete="off">
-            <button type="button" class="search-btn">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="2" fill="none"></circle><line x1="15" y1="15" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg>
-            </button>
-        </div>
-
         <div class="nav-actions">
-            <!-- <a href="products.html" class="nav-action">
-                <span class="action-icon">❤️</span>
-                <span>Wishlist</span>
-            </a> -->
             <a href="cart.html" class="nav-action">
-                <span class="action-icon">🛒</span>
+                <span class="action-icon">CART</span>
                 <span>Cart</span>
                 <span class="badge" id="cart-count">0</span>
             </a>
             <a href="login.html" class="nav-action" id="authAction">
-                <span class="action-icon">👤</span>
+                <span class="action-icon">USER</span>
                 <span>Account</span>
             </a>
             <button class="signup-btn" id="signupBtn" onclick="window.location='register.html'">Sign Up</button>
@@ -224,10 +135,8 @@
     <div class="mobile-nav-links" id="mobileNavLinks">
         <a href="index.html">Home</a>
         <a href="products.html">Shop</a>
-        <!-- <a href="products.html#deals">Deals</a> -->
-        <!-- <a href="products.html#flash">Flash Sale</a> -->
         <a href="cart.html">Cart</a>
-        <a href="login.html" id="mobileLoginLink">Login</a>
+        <a href="dashboard.html" id="mobileLoginLink">Login</a>
     </div>
 </nav>
 
@@ -237,7 +146,7 @@
             <p class="eyebrow">Your cart</p>
             <h1>My Cart</h1>
         </div>
-        <div style="color:var(--c_text_secondary);font-size:14px;">
+        <div style="color:var(--c-text-secondary);font-size:14px;">
             <span id="cart-count-inline">0</span> items in cart
         </div>
     </section>
@@ -245,19 +154,18 @@
     <div class="cart-layout">
         <div class="cart-list" id="cart-items">
             <div class="empty-cart">
-                <div class="big">🛒</div>
+                <div class="big">CART</div>
                 <h3>Your cart is empty</h3>
                 <p style="margin-top:8px;">Looks like you haven't added anything yet. Start shopping!</p>
-                <a href="products.html" class="primary-btn" style="margin-top:16px;">Start Shopping</a>
+                <a href="products.html" class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;">Start Shopping</a>
             </div>
         </div>
 
         <div class="cart-summary">
             <h3>Order Summary</h3>
-            <div class="summary-row"><span>Subtotal</span><b id="subtotal">₦0</b></div>
-            <div class="summary-row"><span>Shipping</span><b>FREE</b></div>
-            <hr style="border:none;border-top:1px solid var(--c_border);margin:8px 0;">
-            <div class="summary-row"><span><b>Total</b></span><b id="total" style="color:var(--c_primary);font-size:18px;">₦0</b></div>
+            <div class="summary-row"><span>Subtotal</span><b id="subtotal">NGN 0</b></div>
+            <hr style="border:none;border-top:1px solid var(--c-border);margin:8px 0;">
+            <div class="summary-row"><span><b>Total</b></span><b id="total" style="color:var(--c-primary);font-size:18px;">NGN 0</b></div>
             <button class="checkout-btn" onclick="checkout()">Proceed to Checkout</button>
         </div>
     </div>
@@ -265,13 +173,14 @@
 
 <footer class="site-footer">
     <div class="footer-bottom">
-        <p>© 2026 FreshMart Supermarket. All rights reserved.</p>
+        <p>Copyright 2026 TriumphsMart. All rights reserved.</p>
     </div>
 </footer>
 
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
 <script src="js/main.js"></script>
 <script>
-// Render cart using the new Temu-style layout
 function renderCart() {
     var user = getCurrentUser();
     var container = document.getElementById("cart-items");
@@ -281,9 +190,9 @@ function renderCart() {
     if (!container) return;
 
     if (!user) {
-        container.innerHTML = '<div class="empty-cart"><div class="big">🔒</div><h3>Please login</h3><p style="margin-top:8px;">You need to log in to view your cart.</p><a href="login.html" class="primary-btn" style="margin-top:16px;">Login</a></div>';
-        if (totalEl) totalEl.innerText = "₦0";
-        if (subtotalEl) subtotalEl.innerText = "₦0";
+        container.innerHTML = '<div class="empty-cart"><div class="big">LOCK</div><h3>Please login</h3><p style="margin-top:8px;">You need to log in to view your cart.</p><a href="login.html" class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;">Login</a></div>';
+        if (totalEl) totalEl.innerText = "NGN 0";
+        if (subtotalEl) subtotalEl.innerText = "NGN 0";
         if (cartInline) cartInline.textContent = "0";
         return;
     }
@@ -294,9 +203,9 @@ function renderCart() {
     var count = 0;
 
     if (cart.length === 0) {
-        container.innerHTML = '<div class="empty-cart"><div class="big">🛒</div><h3>Your cart is empty</h3><p style="margin-top:8px;">Looks like you haven\'t added anything yet. Start shopping!</p><a href="products.html" class="primary-btn" style="margin-top:16px;">Start Shopping</a></div>';
-        if (totalEl) totalEl.innerText = "₦0";
-        if (subtotalEl) subtotalEl.innerText = "₦0";
+        container.innerHTML = '<div class="empty-cart"><div class="big">CART</div><h3>Your cart is empty</h3><p style="margin-top:8px;">Looks like you haven\'t added anything yet. Start shopping!</p><a href="products.html" class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;">Start Shopping</a></div>';
+        if (totalEl) totalEl.innerText = "NGN 0";
+        if (subtotalEl) subtotalEl.innerText = "NGN 0";
         if (cartInline) cartInline.textContent = "0";
         return;
     }
@@ -307,33 +216,37 @@ function renderCart() {
         total += item.price * item.quantity;
         var card = document.createElement("div");
         card.className = "cart-item";
-        var displayPrice = "₦" + item.price.toLocaleString();
-        var discountHtml = item.originalPrice ? '<span class="item-discount">₦' + item.originalPrice.toLocaleString() + '</span>' : '';
+
+        var imgHtml = item.image && (String(item.image).indexOf("data:") === 0 || String(item.image).indexOf("http") === 0)
+            ? '<img src="' + item.image + '" alt="' + item.name + '">'
+            : '<span style="font-size:34px;">' + (item.image || "SHOP") + "</span>";
+
         card.innerHTML =
-            '<div class="item-img">' + (item.image || '🛒') + '</div>' +
+            '<div class="item-img">' + imgHtml + '</div>' +
             '<div class="item-body">' +
               '<h3>' + item.name + '</h3>' +
-              '<div class="item-price">' + displayPrice + '</div>' + discountHtml +
-              '<div class="qty-control"><button onclick="decQty(' + index + ')" disabled>-</button><b>' + item.quantity + '</b><button onclick="incQty(' + index + ')" disabled>+</button></div>' +
-              '<div class="remove-btn" onclick="removeItem(' + index + ')">🗑 Remove</div>' +
+              '<div class="item-price">' + price(item.price) + '</div>' +
+              '<div class="qty-control">' +
+                '<button onclick="decQty(' + index + ')">-</button>' +
+                '<b>' + item.quantity + '</b>' +
+                '<button onclick="incQty(' + index + ')">+</button>' +
+              '</div>' +
+              '<div class="remove-btn" onclick="removeItem(' + index + ')">Remove</div>' +
             '</div>';
         container.appendChild(card);
     });
 
-    if (totalEl) totalEl.innerText = "₦" + total.toLocaleString();
-    if (subtotalEl) subtotalEl.innerText = "₦" + total.toLocaleString();
+    if (totalEl) totalEl.innerText = price(total);
+    if (subtotalEl) subtotalEl.innerText = price(total);
     if (cartInline) cartInline.textContent = count;
 }
 
-function checkout() {
-    var user = getCurrentUser();
-    if (!user) { alert("Please login first"); window.location.href = "login.html"; return; }
-    var key = "cart_" + user.email;
-    var cart = JSON.parse(localStorage.getItem(key)) || [];
-    if (cart.length === 0) { alert("Your cart is empty"); return; }
-    alert("Proceeding to checkout... (this demo uses the order form below)");
-    placeOrder();
-}
+window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+    renderCart();
+});
 </script>
 </body>
 </html>

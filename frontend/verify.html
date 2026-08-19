@@ -3,35 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify Account — FreshMart</title>
+    <title>Verify Account - TriumphsMart</title>
     <link rel="stylesheet" href="css/style.css">
-    <!-- EmailJS SDK (config loaded for consistency) -->
-    <script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
 </head>
 <body>
 
 <!-- Top utility bar -->
 <div class="topbar">
     <div class="topbar-left">
-        <a href="#" class="flag">🇦 &nbsp; English</a>
+        <a href="#" class="flag">EN English</a>
         <a href="index.html">Home</a>
     </div>
-    <a href="#" class="flag">🌐 EN</a>
+    <a href="#" class="flag">EN</a>
 </div>
 
 <header class="navbar">
     <div class="nav-row">
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="index.html" class="brand"><span class="brand-mark">🛒</span><span>FreshMart</span></a>
+            <a href="index.html" class="brand"><span class="brand-mark">SHOP</span><span>TriumphsMart</span></a>
             <div class="nav-links" id="navLinks">
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="products.html" class="nav-link">Shop</a>
-                <!-- <a href="cart.html" class="nav-link">Cart</a>   -->
+                <a href="cart.html" class="nav-link">Cart</a>
             </div>
         </div>
         <div class="nav-actions">
             <a href="cart.html" class="nav-action">
-                <span class="action-icon">🛒</span>
+                <span class="action-icon">CART</span>
                 <span>Cart</span>
                 <span class="badge" id="cart-count">0</span>
             </a>
@@ -54,6 +52,7 @@
         <a href="cart.html">Cart</a>
         <a href="login.html">Login</a>
         <a href="register.html">Register</a>
+        <a href="admin.html">Admin</a>
     </div>
 </nav>
 
@@ -63,7 +62,7 @@
 
 <section class="auth-split">
     <div class="auth-illustration">
-        <div class="big">📧</div>
+        <div class="big">EMAIL</div>
         <h2 style="color:#fff;font-size:1.8rem;font-weight:800;">Check your inbox</h2>
         <p>We've sent a 6-digit verification code to your email. Enter it below to complete registration.</p>
         <p style="color:rgba(255,255,255,0.85);">Didn't receive it? Check your spam folder or <a href="register.html" style="color:#fff;font-weight:700;text-decoration:underline;">resend</a>.</p>
@@ -71,27 +70,48 @@
     <div class="auth-card">
         <h2>Verification Code</h2>
         <p class="sub">Enter the 6-digit code sent to your email address.</p>
-        <form id="verifyForm" onsubmit="verifyCode(); return false;">
-            <div class="code-inputs">
-                <input type="text" id="verification_code" placeholder="Enter 6-digit code" required maxlength="6" minlength="6" pattern="[0-9]{6}">
-            </div>
-            <button type="submit">Verify Account</button>
-        </form>
-        <div class="resend-link">
-            <a href="register.html">Resend code / Try again</a>
-        </div>
+
+        <!-- Dev mode code display (shown when EmailJS is not configured) -->
+<div id="devCodeBox" style="display:none;background:#fff8e6;border:1px solid #ffd93d;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;">
+    <div style="font-size:12px;font-weight:600;color:#8a6d00;margin-bottom:6px;">DEV MODE - no email configured</div>
+    <div style="font-size:13px;color:#666;margin-bottom:8px;">Your verification code is:</div>
+    <div id="devCodeDisplay" style="font-size:32px;font-weight:800;color:var(--c-primary);letter-spacing:4px;font-family:monospace;">000000</div>
+</div>
+
+<form id="verifyForm" onsubmit="verifyCode(); return false;">
+    <div class="code-inputs">
+        <input type="text" id="verification_code" placeholder="Enter 6-digit code" required maxlength="6" minlength="6" pattern="[0-9]{6}">
+    </div>
+    <button type="submit">Verify Account</button>
+</form>
+<div class="resend-link">
+    <a href="register.html">Resend code / Try again</a>
+</div>
     </div>
 </section>
 
 <footer class="site-footer">
     <div class="footer-bottom">
-        <p>© 2026 FreshMart Supermarket. All rights reserved.</p>
+        <p>Copyright 2026 TriumphsMart. All rights reserved.</p>
     </div>
 </footer>
 
-<!-- Scripts: EmailJS SDK -> Config -> Main -->
 <script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
 <script src="js/config.js"></script>
+<script src="js/data.js"></script>
 <script src="js/main.js"></script>
+<script>
+/* Show dev-mode verification code if EmailJS isn't configured */
+window.addEventListener("DOMContentLoaded", function () {
+    try {
+        var devCode = localStorage.getItem("dev_verification_code");
+        var devBox = document.getElementById("devCodeBox");
+        if (devCode && devBox) {
+            document.getElementById("devCodeDisplay").textContent = devCode;
+            devBox.style.display = "block";
+        }
+    } catch (e) {}
+});
+</script>
 </body>
 </html>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout — FreshMart</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Top utility bar -->
+<div class="topbar">
+    <div class="topbar-left">
+        <a href="#" class="flag">🇦 &nbsp; English</a>
+        <a href="index.html">Home</a>
+        <a href="products.html">Shop</a>
+        <a href="cart.html">Cart</a>
+    </div>
+    <a href="#" class="flag">🌐 EN</a>
+</div>
+
+<header class="navbar">
+    <div class="nav-row">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <a href="index.html" class="brand"><span class="brand-mark">🛒</span><span>FreshMart</span></a>
+            <!-- <button class="category-btn" id="categoryBtn">
+                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
+                <span>Categories</span>
+            </button>
+            <div class="category-dropdown" id="categoryDropdown">
+                <a href="#" class="cat-item"><span class="cat-icon">🥫</span> Pantry Staples</a>
+                <a href="#" class="cat-item"><span class="cat-icon">🥩</span> Fresh Meat</a>
+                <a href="#" class="cat-item"><span class="cat-icon">🥬</span> Vegetables</a>
+                <a href="#" class="cat-item"><span class="cat-icon">🧁</span> Bakery</a>
+                <a href="#" class="cat-item"><span class="cat-icon">🥛</span> Dairy</a>
+                <a href="#" class="cat-item"><span class="cat-icon">🍚</span> Grains</a>
+                <a href="#" class="cat-item"><span class="cat-icon">🥤</span> Drinks</a>
+            </div> -->
+            <div class="nav-links" id="navLinks">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="products.html" class="nav-link">Shop</a>
+                <!-- <a href="cart.html" class="nav-link nav-link--active">Cart</a> -->
+            </div>
+        </div>
+        <div class="nav-actions">
+            <!-- <a href="products.html" class="nav-action">
+                <span class="action-icon">❤️</span>
+                <span>Wishlist</span>
+                <span class="badge" id="wishlist-count" style="display:none;">0</span>
+            </a> -->
+            <a href="cart.html" class="nav-action">
+                <span class="action-icon">🛒</span>
+                <span>Cart</span>
+                <span class="badge" id="cart-count">0</span>
+            </a>
+            <a href="login.html" class="nav-action" id="authAction">
+                <span class="action-icon">👤</span>
+                <span>Account</span>
+            </a>
+            <button class="signup-btn" id="signupBtn" onclick="window.location='register.html'">Sign Up</button>
+            <!-- <button class="category-btn mobile-nav" id="themeToggle" onclick="toggleTheme()" style="background:#f0f2f5;color:#212121;">🌙</button> -->
+            <button class="category-btn mobile-nav" id="menuToggle" style="background:#f0f2f5;color:#212121;">
+                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Mobile overlay -->
+<div class="mobile-overlay" id="mobileOverlay"></div>
+
+<!-- Mobile sliding menu -->
+<nav class="mobile-menu" id="mobileMenu">
+    <button class="close-menu" id="closeMenu">&times;</button>
+    <div class="mobile-nav-links" id="mobileNavLinks">
+        <a href="index.html">Home</a>
+        <a href="products.html">Shop</a>
+        <a href="cart.html">Cart</a>
+        <a href="login.html">Login</a>
+        <a href="register.html">Register</a>
+    </div>
+</nav>
+
+<main class="page-shell">
+    <section class="section-head page-head">
+        <div>
+            <p class="eyebrow">Checkout</p>
+            <h1>Complete your order</h1>
+        </div>
+    </section>
+
+    <div class="cart-layout">
+        <!-- Checkout Form -->
+        <div>
+            <div class="auth-card" style="margin-bottom: 24px;">
+                <h2>Shipping Information</h2>
+                <p class="sub">Enter your delivery details.</p>
+                <form id="checkoutForm" onsubmit="finalizeCheckout(); return false;">
+                    <div class="auth-inputs">
+                        <input type="text" id="full_name" placeholder="Full Name" required autocomplete="off">
+                        <input type="email" id="email" placeholder="Email Address" required autocomplete="off">
+                        <input type="tel" id="phone" placeholder="Phone Number" required autocomplete="off">
+                        <textarea id="address" placeholder="Delivery Address" required></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="auth-card">
+                <h2>Payment Method</h2>
+                <p class="sub">Select how you'd like to pay.</p>
+                <div class="payment-options">
+                    <label class="payment-option selected" for="cash">
+                        <input type="radio" name="payment" id="cash" value="cash" checked>
+                        <span class="pay-label">Cash on Delivery</span>
+                    </label>
+                    <label class="payment-option" for="card">
+                        <input type="radio" name="payment" id="card" value="card">
+                        <span class="pay-label">Card Payment</span>
+                    </label>
+                </div>
+                <button class="checkout-btn" style="margin-top:0;" onclick="finalizeCheckout()">Place Order</button>
+            </div>
+        </div>
+
+        <!-- Order Summary -->
+        <div class="cart-summary">
+            <h3>Order Summary</h3>
+            <div class="summary-row"><span>Subtotal</span><b id="order-subtotal">₦0</b></div>
+            <div class="summary-row"><span>Shipping</span><b>FREE</b></div>
+            <!-- <div class="summary-row"><span>Tax (7.5%)</span><b id="order-tax">₦0</b></div> -->
+            <hr style="border:none;border-top:1px solid var(--c-border);margin:8px 0;">
+            <div class="summary-row"><span><b>Total</b></span><b id="order-total" style="color:var(--c-primary);font-size:18px;">₦0</b></div>
+        </div>
+    </div>
+</main>
+
+<footer class="site-footer">
+    <div class="footer-grid">
+        <div>
+            <h4>FreshMart</h4>
+            <p style="color:#888;font-size:12px;line-height:1.6;">One-stop supermarket delivering fresh groceries and everyday essentials to your door.</p>
+            <div class="social-icons">
+                <a href="#" title="Facebook">📘</a>
+                <a href="#" title="Instagram">📷</a>
+                <a href="#" title="Twitter">🐦</a>
+                <a href="#" title="WhatsApp">💬</a>
+            </div>
+        </div>
+        <div>
+            <h4>Customer Service</h4>
+            <ul>
+                <li><a href="#">Help Center</a></li>
+                <li><a href="#">Contact Us</a></li>
+                <li><a href="#">How to Order</a></li>
+                <li><a href="#">Shipping & Returns</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Shop</h4>
+            <ul>
+                <li><a href="#">Pantry</a></li>
+                <li><a href="#">Fresh Meat</a></li>
+                <li><a href="#">Vegetables</a></li>
+                <li><a href="#">Bakery</a></li>
+                <li><a href="#">Dairy</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Follow Us</h4>
+            <ul>
+                <li><a href="#">Facebook</a></li>
+                <li><a href="#">Instagram</a></li>
+                <li><a href="#">Twitter</a></li>
+                <li><a href="#">WhatsApp</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>About</h4>
+            <ul>
+                <li><a href="#">Our Story</a></li>
+                <li><a href="#">Terms</a></li>
+                <li><a href="#">Privacy</a></li>
+                <li><a href="#">Careers</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        <p>&copy; 2026 FreshMart Supermarket. All rights reserved.</p>
+    </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/main.js"></script>
+<script>
+function updateOrderSummary() {
+    var user = getCurrentUser();
+    if (!user) return;
+    var key = "cart_" + user.email;
+    var cart = JSON.parse(localStorage.getItem(key)) || [];
+    var subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    var tax = Math.round(subtotal * 0.075);
+    var total = subtotal + tax;
+
+    var subEl = document.getElementById("order-subtotal");
+    var taxEl = document.getElementById("order-tax");
+    var totalEl = document.getElementById("order-total");
+
+    if (subEl) subEl.innerText = "\u20A6" + subtotal.toLocaleString();
+    if (taxEl) taxEl.innerText = "\u20A6" + tax.toLocaleString();
+    if (totalEl) totalEl.innerText = "\u20A6" + total.toLocaleString();
+}
+
+function finalizeCheckout() {
+    var user = getCurrentUser();
+    if (!user) { showToast("Please login first", "error"); window.location.href = "login.html"; return; }
+
+    var name = document.getElementById("full_name").value.trim();
+    var email = document.getElementById("email").value.trim();
+    var phone = document.getElementById("phone").value.trim();
+    var address = document.getElementById("address").value.trim();
+
+    if (!name || !email || !phone || !address) {
+        showToast("Please fill in all fields", "error");
+        return;
+    }
+
+    var key = "cart_" + user.email;
+    var cart = JSON.parse(localStorage.getItem(key)) || [];
+    if (cart.length === 0) {
+        showToast("Your cart is empty", "error");
+        window.location.href = "products.html";
+        return;
+    }
+
+    var orderRef = "FM" + Date.now().toString().slice(-8);
+    localStorage.setItem("lastOrderRef", orderRef);
+
+    var orderDetails = cart.map(item =>
+        item.name + " x " + item.quantity + " = \u20A6" + (item.price * item.quantity).toLocaleString()
+    ).join("\n");
+    var total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    var subject = "New Order from " + user.name;
+    var body = "Hello FreshMart,\n\nI would like to place an order:\n\n" +
+        orderDetails + "\n\nTotal: \u20A6" + total.toLocaleString() + "\n\n" +
+        "Delivery Details:\nName: " + name + "\nPhone: " + phone + "\nAddress: " + address +
+        "\n\nThank you,\n" + user.name;
+
+    window.open("https://mail.google.com/mail/?view=cm&fs=1&to=sweetcrumbs@gmail.com" +
+        "&su=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body));
+
+    localStorage.removeItem(key);
+    updateCartCount();
+    window.location.href = "finally.html";
+}
+
+window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+    updateOrderSummary();
+});
+</script>
+</body>
+</html>

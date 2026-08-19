@@ -1,0 +1,10 @@
+@import url('login.css'); /* Reuse login styles */
+
+/* Optional: tweak register button */
+.auth-page button {
+    background: #6d4c41;
+}
+
+.auth-page button:hover {
+    background: #3b2f2f;
+}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Account — FreshMart</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- EmailJS SDK (config loaded for consistency) -->
+    <script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
+</head>
+<body>
+
+<!-- Top utility bar -->
+<div class="topbar">
+    <div class="topbar-left">
+        <a href="#" class="flag">🇦 &nbsp; English</a>
+        <a href="index.html">Home</a>
+    </div>
+    <a href="#" class="flag">🌐 EN</a>
+</div>
+
+<header class="navbar">
+    <div class="nav-row">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <a href="index.html" class="brand"><span class="brand-mark">🛒</span><span>FreshMart</span></a>
+            <div class="nav-links" id="navLinks">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="products.html" class="nav-link">Shop</a>
+                <!-- <a href="cart.html" class="nav-link">Cart</a>   -->
+            </div>
+        </div>
+        <div class="nav-actions">
+            <a href="cart.html" class="nav-action">
+                <span class="action-icon">🛒</span>
+                <span>Cart</span>
+                <span class="badge" id="cart-count">0</span>
+            </a>
+            <button class="category-btn mobile-nav" id="menuToggle" style="background:#f0f2f5;color:#212121;">
+                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- Mobile overlay -->
+<div class="mobile-overlay" id="mobileOverlay"></div>
+
+<!-- Mobile sliding menu -->
+<nav class="mobile-menu" id="mobileMenu">
+    <button class="close-menu" id="closeMenu">&times;</button>
+    <div class="mobile-nav-links" id="mobileNavLinks">
+        <a href="index.html">Home</a>
+        <a href="products.html">Shop</a>
+        <a href="cart.html">Cart</a>
+        <a href="login.html">Login</a>
+        <a href="register.html">Register</a>
+    </div>
+</nav>
+
+<section class="auth-hero">
+    <h1>Verify your email</h1>
+</section>
+
+<section class="auth-split">
+    <div class="auth-illustration">
+        <div class="big">📧</div>
+        <h2 style="color:#fff;font-size:1.8rem;font-weight:800;">Check your inbox</h2>
+        <p>We've sent a 6-digit verification code to your email. Enter it below to complete registration.</p>
+        <p style="color:rgba(255,255,255,0.85);">Didn't receive it? Check your spam folder or <a href="register.html" style="color:#fff;font-weight:700;text-decoration:underline;">resend</a>.</p>
+    </div>
+    <div class="auth-card">
+        <h2>Verification Code</h2>
+        <p class="sub">Enter the 6-digit code sent to your email address.</p>
+        <form id="verifyForm" onsubmit="verifyCode(); return false;">
+            <div class="code-inputs">
+                <input type="text" id="verification_code" placeholder="Enter 6-digit code" required maxlength="6" minlength="6" pattern="[0-9]{6}">
+            </div>
+            <button type="submit">Verify Account</button>
+        </form>
+        <div class="resend-link">
+            <a href="register.html">Resend code / Try again</a>
+        </div>
+    </div>
+</section>
+
+<footer class="site-footer">
+    <div class="footer-bottom">
+        <p>© 2026 FreshMart Supermarket. All rights reserved.</p>
+    </div>
+</footer>
+
+<!-- Scripts: EmailJS SDK -> Config -> Main -->
+<script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

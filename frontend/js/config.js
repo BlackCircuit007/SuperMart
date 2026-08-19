@@ -24,10 +24,10 @@ var EMAILJS_LOGIN_TEMPLATE_ID = localStorage.getItem("tm_emailjs_login_template_
 var EMAILJS_PUBLIC_KEY = localStorage.getItem("tm_emailjs_public_key") || "";
 
 var EMAILJS_STATE = {
-    serviceId: service_t3trcne,
-    templateId: template_ddax5bh,
-    loginTemplateId: template_ddax5bh,
-    publicKey: 1JESagoXdGOO8s-EK,
+    serviceId: "service_t3trcne",
+    templateId: "template_ddax5bh",
+    loginTemplateId: "template_ddax5bh",
+    publicKey: "1JESagoXdGOO8s-EK",
     initialized: false
 };
 

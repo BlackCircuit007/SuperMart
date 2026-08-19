@@ -20,6 +20,16 @@
             border-radius: 16px;
             box-shadow: var(--c-shadow);
             padding: 24px;
+            height: auto;
+        }
+        .admin-card2 {
+            background: var(--c-dark-card-bg);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            box-shadow: var(--c-shadow);
+            padding: 24px;
+            /* max-height: 900px; */
+            /* overflow: scroll; */
         }
         body.dark-mode .admin-card {
             background: var(--c-dark-card-bg);
@@ -374,7 +384,7 @@
             </div>
 
             <!-- Remove / Manage Products -->
-            <div class="admin-card">
+            <div class="admin-card2">
                 <h2>🗑️ Manage Products</h2>
                 <p class="sub">Click the delete button to permanently remove a product from the store.</p>
                 <div id="admin-product-list">

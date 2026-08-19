@@ -1,221 +1,407 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Checkout - TriumphsMart</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
 
-<div class="topbar">
-    <div class="topbar-left">
-        <a href="#" class="flag">EN English</a>
-        <a href="index.html">Home</a>
-        <a href="products.html">Shop</a>
-        <a href="cart.html">Cart</a>
+    <div class="topbar">
+        <div class="topbar-left">
+            <a href="#" class="flag">EN English</a>
+            <a href="index.html">Home</a>
+            <a href="products.html">Shop</a>
+            <a href="cart.html">Cart</a>
+        </div>
+        <a href="#" class="flag">EN</a>
     </div>
-    <a href="#" class="flag">EN</a>
-</div>
 
-<header class="navbar">
-    <div class="nav-row">
-        <div style="display:flex;align-items:center;gap:12px;">
-            <a href="index.html" class="brand"><span class="brand-mark">SHOP</span><span>TriumphsMart</span></a>
-            <div class="nav-links" id="navLinks">
-                <a href="index.html" class="nav-link">Home</a>
-                <a href="products.html" class="nav-link">Shop</a>
-                <a href="cart.html" class="nav-link">Cart</a>
+    <header class="navbar">
+        <div class="nav-row">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <a href="index.html" class="brand"><span class="brand-mark">SHOP</span><span>TriumphsMart</span></a>
+                <div class="nav-links" id="navLinks">
+                    <a href="index.html" class="nav-link">Home</a>
+                    <a href="products.html" class="nav-link">Shop</a>
+                    <a href="cart.html" class="nav-link">Cart</a>
+                </div>
+            </div>
+            <div class="nav-actions">
+                <a href="cart.html" class="nav-action">
+                    <span class="action-icon">CART</span>
+                    <span>Cart</span>
+                    <span class="badge" id="cart-count">0</span>
+                </a>
+                <a href="login.html" class="nav-action" id="authAction">
+                    <span class="action-icon">USER</span>
+                    <span>Account</span>
+                </a>
+                <button class="signup-btn" id="signupBtn" onclick="window.location='register.html'">Sign Up</button>
+                <button class="category-btn mobile-nav" id="menuToggle" style="background:#f0f2f5;color:#212121;">
+                    <svg viewBox="0 0 100 80" fill="currentColor">
+                        <rect width="80" height="12"></rect>
+                        <rect y="30" width="80" height="12"></rect>
+                        <rect y="60" width="80" height="12"></rect>
+                    </svg>
+                </button>
             </div>
         </div>
-        <div class="nav-actions">
-            <a href="cart.html" class="nav-action">
-                <span class="action-icon">CART</span>
-                <span>Cart</span>
-                <span class="badge" id="cart-count">0</span>
-            </a>
-            <a href="login.html" class="nav-action" id="authAction">
-                <span class="action-icon">USER</span>
-                <span>Account</span>
-            </a>
-            <button class="signup-btn" id="signupBtn" onclick="window.location='register.html'">Sign Up</button>
-            <button class="category-btn mobile-nav" id="menuToggle" style="background:#f0f2f5;color:#212121;">
-                <svg viewBox="0 0 100 80" fill="currentColor"><rect width="80" height="12"></rect><rect y="30" width="80" height="12"></rect><rect y="60" width="80" height="12"></rect></svg>
-            </button>
+    </header>
+
+    <!-- Mobile overlay -->
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
+    <nav class="mobile-menu" id="mobileMenu">
+        <button class="close-menu" id="closeMenu">&times;</button>
+        <div class="mobile-nav-links" id="mobileNavLinks">
+            <a href="index.html">Home</a>
+            <a href="products.html">Shop</a>
+            <a href="cart.html">Cart</a>
+            <a href="dashboard.html" id="mobileLoginLink">Login</a>
         </div>
-    </div>
-</header>
+    </nav>
 
-<!-- Mobile overlay -->
-<div class="mobile-overlay" id="mobileOverlay"></div>
+    <main class="page-shell">
+        <section class="section-head page-head">
+            <div>
+                <p class="eyebrow">Checkout</p>
+                <h1>Complete your order</h1>
+            </div>
+        </section>
 
-<nav class="mobile-menu" id="mobileMenu">
-    <button class="close-menu" id="closeMenu">&times;</button>
-    <div class="mobile-nav-links" id="mobileNavLinks">
-        <a href="index.html">Home</a>
-        <a href="products.html">Shop</a>
-        <a href="cart.html">Cart</a>
-        <a href="dashboard.html" id="mobileLoginLink">Login</a>
-    </div>
-</nav>
+        <div class="cart-layout">
+            <div>
+                <div class="auth-card" style="margin-bottom: 24px;">
+                    <h2>Shipping Information</h2>
+                    <p class="sub">Enter your delivery details.</p>
+                    <div class="auth-inputs">
+                        <input type="text" id="shipping_name" placeholder="Full Name" required autocomplete="off">
+                        <input type="email" id="shipping_email" placeholder="Email Address" required autocomplete="off">
+                        <input type="tel" id="shipping_phone" placeholder="Phone Number" required autocomplete="off">
+                        <textarea id="shipping_address" placeholder="Delivery Address" required
+                            style="width:100%;padding:12px 14px;border:1px solid var(--c-border);border-radius:10px;font-size:15px;min-height:100px;resize:vertical;background:var(--c-card-bg);color:var(--c-text);margin-bottom:14px;"></textarea>
+                    </div>
+                </div>
 
-<main class="page-shell">
-    <section class="section-head page-head">
-        <div>
-            <p class="eyebrow">Checkout</p>
-            <h1>Complete your order</h1>
-        </div>
-    </section>
+                <div class="auth-card">
+                    <h2>Payment Method</h2>
+                    <p class="sub">Select how you'd like to pay.</p>
+                    <div class="payment-options">
+                        <label class="payment-option selected" for="cash">
+                            <input type="radio" name="payment" id="cash" value="cash" checked>
+                            <span class="pay-label">Cash on Delivery</span>
+                        </label>
+                        <label class="payment-option" for="card">
+                            <input type="radio" name="payment" id="card" value="card">
+                            <button type="button" class="pay-label" id="becomePayerBtn" style="background:none;border:none;color:inherit;padding:0;cursor:pointer;width:100%;">Transfer</button>
+                        </label>
+                    </div>
 
-    <div class="cart-layout">
-        <div>
-            <div class="auth-card" style="margin-bottom: 24px;">
-                <h2>Shipping Information</h2>
-                <p class="sub">Enter your delivery details.</p>
-                <div class="auth-inputs">
-                    <input type="text" id="shipping_name" placeholder="Full Name" required autocomplete="off">
-                    <input type="email" id="shipping_email" placeholder="Email Address" required autocomplete="off">
-                    <input type="tel" id="shipping_phone" placeholder="Phone Number" required autocomplete="off">
-                    <textarea id="shipping_address" placeholder="Delivery Address" required style="width:100%;padding:12px 14px;border:1px solid var(--c-border);border-radius:10px;font-size:15px;min-height:100px;resize:vertical;background:var(--c-card-bg);color:var(--c-text);margin-bottom:14px;"></textarea>
+                    <!-- Transaction Panel (Payment Verification Modal) -->
+                    <div id="paymentModal" class="payment-modal" aria-hidden="true">
+                        <div class="payment-modal__panel">
+                            <button type="button" class="payment-modal__close" id="closePaymentModal" title="Close">&times;</button>
+                            <h3>Transaction Panel</h3>
+                            <p>Send payment to the OPAY account below to unlock premium features and access the Payer
+                                Dashboard.</p>
+                            <p><strong>OPAY Number:</strong> 7039245529</p>
+                            <p>Enter the details of your transaction below so we can verify it.</p>
+
+                            <label for="payerPhoneInput">Your Phone (used for verification)</label>
+                            <input id="payerPhoneInput" type="text" placeholder="e.g. 08012345678" />
+
+                            <label for="paymentAmountInput">Amount Paid (NGN) — Fixed price</label>
+                            <input id="paymentAmountInput" type="number" value="5000" readonly />
+
+                            <label for="paymentRefInput">Transaction Reference</label>
+                            <input id="paymentRefInput" type="text" placeholder="Provider transaction reference" />
+
+                            <div class="payment-modal__actions">
+                                <button type="button" id="confirmPaidBtn" class="checkout-btn" style="flex:1;background:var(--c-accent);">Verify Payment</button>
+                                <button type="button" id="closePaymentModalBtn" class="btn secondary" style="flex:1;">Close</button>
+                            </div>
+                            <p id="paymentStatus" class="payment-status" aria-live="polite"></p>
+                            <p style="margin-top:10px;font-size:0.9rem;color:var(--c-text-secondary)">Note: For a real deployment, you
+                                must verify payments server-side with OPAY or your payment provider.</p>
+                        </div>
+                    </div>
+
+                    <button class="checkout-btn" style="margin-top:0;" onclick="finalizeCheckout()">Place Order</button>
                 </div>
             </div>
 
-            <div class="auth-card">
-                <h2>Payment Method</h2>
-                <p class="sub">Select how you'd like to pay.</p>
-                <div class="payment-options">
-                    <label class="payment-option selected" for="cash">
-                        <input type="radio" name="payment" id="cash" value="cash" checked>
-                        <span class="pay-label">Cash on Delivery</span>
-                    </label>
-                    <label class="payment-option" for="card">
-                        <input type="radio" name="payment" id="card" value="card">
-                        <span class="pay-label">Card Payment</span>
-                    </label>
-                </div>
-                <button class="checkout-btn" style="margin-top:0;" onclick="finalizeCheckout()">Place Order</button>
+            <div class="cart-summary">
+                <h3>Order Summary</h3>
+                <div class="summary-row"><span>Subtotal</span><b id="order-subtotal">NGN 0</b></div>
+                <div class="summary-row"><span>Shipping</span><b>FREE</b></div>
+                <hr style="border:none;border-top:1px solid var(--c-border);margin:8px 0;">
+                <div class="summary-row"><span><b>Total</b></span><b id="order-total"
+                        style="color:var(--c-primary);font-size:18px;">NGN 0</b></div>
             </div>
         </div>
+    </main>
 
-        <div class="cart-summary">
-            <h3>Order Summary</h3>
-            <div class="summary-row"><span>Subtotal</span><b id="order-subtotal">NGN 0</b></div>
-            <div class="summary-row"><span>Shipping</span><b>FREE</b></div>
-            <hr style="border:none;border-top:1px solid var(--c-border);margin:8px 0;">
-            <div class="summary-row"><span><b>Total</b></span><b id="order-total" style="color:var(--c-primary);font-size:18px;">NGN 0</b></div>
+    <footer class="site-footer">
+        <div class="footer-bottom">
+            <p>Copyright 2026 TriumphsMart. All rights reserved.</p>
         </div>
-    </div>
-</main>
+    </footer>
 
-<footer class="site-footer">
-    <div class="footer-bottom">
-        <p>Copyright 2026 TriumphsMart. All rights reserved.</p>
-    </div>
-</footer>
+    <script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+        (function () {
+            "use strict";
 
-<script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
-<script src="js/config.js"></script>
-<script src="js/data.js"></script>
-<script src="js/main.js"></script>
-<script>
-function updateOrderSummary() {
-    var user = getCurrentUser();
-    if (!user) return;
-    var key = "cart_" + user.email;
-    var cart = JSON.parse(localStorage.getItem(key)) || [];
-    var subtotal = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
+            // ---- IDs / constants ----
+            var BECOME_PAYER_BTN_ID = "becomePayerBtn";
+            var PAYMENT_MODAL_ID = "paymentModal";
+            var CONFIRM_PAID_BTN_ID = "confirmPaidBtn";
+            var CLOSE_PAYMENT_MODAL_IDS = ["closePaymentModal", "closePaymentModalBtn"];
+            var PAYMENT_STATUS_ID = "paymentStatus";
 
-    var subEl = document.getElementById("order-subtotal");
-    var totalEl = document.getElementById("order-total");
-    if (subEl) subEl.innerText = price(subtotal);
-    if (totalEl) totalEl.innerText = price(subtotal);
-}
+            // ---- Open / close payment modal (class-based, smooth) ----
+            function openPaymentModal() {
+                var modal = document.getElementById(PAYMENT_MODAL_ID);
+                if (!modal) return;
+                modal.classList.add("active");
+                modal.setAttribute("aria-hidden", "false");
+            }
 
-async function finalizeCheckout() {
-    var user = getCurrentUser();
-    if (!user) { showToast("Please login first", "error"); window.location.href = "login.html"; return; }
+            function closePaymentModal() {
+                var modal = document.getElementById(PAYMENT_MODAL_ID);
+                if (!modal) return;
+                modal.classList.remove("active");
+                modal.setAttribute("aria-hidden", "true");
+                setVerificationStatus("");
+            }
 
-    var name = document.getElementById("shipping_name").value.trim();
-    var email = document.getElementById("shipping_email").value.trim();
-    var phone = document.getElementById("shipping_phone").value.trim();
-    var address = document.getElementById("shipping_address").value.trim();
+            // ---- Helper: show/hide loading state on the verify button ----
+            function setVerificationButtonLoading(btn, loading) {
+                if (!btn) return;
+                btn.disabled = !!loading;
+                btn.textContent = loading ? "Sending..." : "Verify Payment";
+            }
 
-    if (!name || !email || !phone || !address) {
-        showToast("Please fill in all fields", "error");
-        return;
-    }
+            // ---- Helper: update status text ----
+            function setVerificationStatus(msg) {
+                var el = document.getElementById(PAYMENT_STATUS_ID);
+                if (!el) return;
+                el.textContent = msg || "";
+            }
 
-    var key = "cart_" + user.email;
-    var cart = JSON.parse(localStorage.getItem(key)) || [];
-    if (cart.length === 0) {
-        showToast("Your cart is empty", "error");
-        window.location.href = "products.html";
-        return;
-    }
+            // ---- Update order summary ----
+            function updateOrderSummary() {
+                var user = getCurrentUser();
+                if (!user) return;
+                var key = "cart_" + user.email;
+                var cart = JSON.parse(localStorage.getItem(key)) || [];
+                var subtotal = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
+                var subEl = document.getElementById("order-subtotal");
+                var totalEl = document.getElementById("order-total");
+                if (subEl) subEl.innerText = price(subtotal);
+                if (totalEl) totalEl.innerText = price(subtotal);
+            }
 
-    var orderRef = "TM" + Date.now().toString().slice(-8);
-    var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
+            // ---- Finalize checkout (place order) ----
+            async function finalizeCheckout() {
+                var user = getCurrentUser();
+                if (!user) { showToast("Please login first", "error"); window.location.href = "login.html"; return; }
 
-    // Save order to user's dashboard
-    var ordersKey = "orders_" + user.email;
-    var orders = JSON.parse(localStorage.getItem(ordersKey)) || [];
-    orders.unshift({
-        ref: orderRef,
-        date: new Date().toLocaleString(),
-        total: total,
-        items: cart,
-        name: name,
-        phone: phone,
-        address: address,
-        payment: document.querySelector("input[name='payment']:checked").value
-    });
-    localStorage.setItem(ordersKey, JSON.stringify(orders));
+                var name = document.getElementById("shipping_name").value.trim();
+                var email = document.getElementById("shipping_email").value.trim();
+                var phone = document.getElementById("shipping_phone").value.trim();
+                var address = document.getElementById("shipping_address").value.trim();
 
-    var orderDetails = cart.map(function (item) {
-        return item.name + " x " + item.quantity + " = " + price(item.price * item.quantity);
-    }).join("\n");
-
-    // Try to send order notification via EmailJS
-    try {
-        if (typeof emailjs !== "undefined") {
-            if (!EMAILJS_STATE.initialized) initEmailJS();
-            await emailjs.send(
-                EMAILJS_STATE.serviceId,
-                EMAILJS_STATE.templateId,
-                {
-                    to_email: email,
-                    to_name: name,
-                    verification_code: orderRef,
-                    app_name: "TriumphsMart Order #" + orderRef
+                if (!name || !email || !phone || !address) {
+                    showToast("Please fill in all fields", "error");
+                    return;
                 }
-            );
-            console.log("Order notification sent");
-        }
-    } catch (err) {
-        console.warn("Order email failed, continuing:", err);
-    }
 
-    // Clear cart
-    localStorage.removeItem(key);
-    updateCartCount();
-    window.location.href = "finally.html?ref=" + orderRef;
-}
+                var key = "cart_" + user.email;
+                var cart = JSON.parse(localStorage.getItem(key)) || [];
+                if (cart.length === 0) {
+                    showToast("Your cart is empty", "error");
+                    window.location.href = "products.html";
+                    return;
+                }
 
-window.addEventListener("DOMContentLoaded", function () {
-    initTheme();
-    initBackToTop();
-    updateAuthUI();
-    updateOrderSummary();
+                var orderRef = "TM" + Date.now().toString().slice(-8);
+                var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
 
-    // Pre-fill from user profile
-    var user = getCurrentUser();
-    if (user) {
-        var nameInput = document.getElementById("shipping_name");
-        var emailInput = document.getElementById("shipping_email");
-        if (nameInput) nameInput.value = user.name;
-        if (emailInput) emailInput.value = user.email;
-    }
-});
-</script>
+                // Save order to user's dashboard
+                var ordersKey = "orders_" + user.email;
+                var orders = JSON.parse(localStorage.getItem(ordersKey)) || [];
+                orders.unshift({
+                    ref: orderRef,
+                    date: new Date().toLocaleString(),
+                    total: total,
+                    items: cart,
+                    name: name,
+                    phone: phone,
+                    address: address,
+                    payment: document.querySelector("input[name='payment']:checked").value
+                });
+                localStorage.setItem(ordersKey, JSON.stringify(orders));
+
+                // Send order notification via EmailJS
+                try {
+                    await sendOrderNotification({
+                        email: email,
+                        name: name,
+                        orderRef: orderRef
+                    });
+                } catch (err) {
+                    console.warn("Order email failed, continuing:", err);
+                }
+
+                // Clear cart
+                localStorage.removeItem(key);
+                updateCartCount();
+                window.location.href = "finally.html?ref=" + orderRef;
+            }
+
+            // ---- Payment option selection highlighting ----
+            function setupPaymentOptions() {
+                var radios = document.querySelectorAll("input[name='payment']");
+                radios.forEach(function (radio) {
+                    radio.addEventListener("change", function () {
+                        var options = document.querySelectorAll(".payment-option");
+                        options.forEach(function (o) { o.classList.remove("selected"); });
+                        var label = document.querySelector("label[for='" + this.id + "']");
+                        if (label) label.classList.add("selected");
+                    });
+                });
+            }
+
+            // ---- Click delegation ----
+            document.addEventListener("click", function (e) {
+                var target = e.target;
+                if (!target) return;
+
+                // Open payment modal
+                if (target.id === BECOME_PAYER_BTN_ID) {
+                    openPaymentModal();
+                    return;
+                }
+
+                // Close modal buttons
+                for (var i = 0; i < CLOSE_PAYMENT_MODAL_IDS.length; i++) {
+                    if (target.id === CLOSE_PAYMENT_MODAL_IDS[i]) {
+                        closePaymentModal();
+                        return;
+                    }
+                }
+
+                // Close modal when clicking the overlay/backdrop
+                if (target.id === PAYMENT_MODAL_ID) {
+                    closePaymentModal();
+                    return;
+                }
+
+                // Verify payment button
+                if (target.id === CONFIRM_PAID_BTN_ID) {
+                    handleVerifyPayment();
+                }
+            });
+
+            // ---- Escape key closes the modal ----
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "Escape") {
+                    var modal = document.getElementById(PAYMENT_MODAL_ID);
+                    if (modal && modal.classList.contains("active")) {
+                        closePaymentModal();
+                    }
+                }
+            });
+
+            // ---- Payment verification: send email to owner ----
+            async function handleVerifyPayment() {
+                var phone = document.getElementById("payerPhoneInput") ? document.getElementById("payerPhoneInput").value.trim() : "";
+                var amount = document.getElementById("paymentAmountInput") ? document.getElementById("paymentAmountInput").value.trim() : "";
+                var ref = document.getElementById("paymentRefInput") ? document.getElementById("paymentRefInput").value.trim() : "";
+                var btn = document.getElementById(CONFIRM_PAID_BTN_ID);
+
+                if (!phone || !amount || !ref) {
+                    alert("Please fill phone, amount and transaction reference.");
+                    return;
+                }
+
+                // enforce fixed price
+                if (String(amount) !== "5000") {
+                    alert("Payment must be exactly 5000 NGN.");
+                    return;
+                }
+
+                setVerificationButtonLoading(btn, true);
+                setVerificationStatus("Sending your verification request. Please wait...");
+
+                // send payment verification email to the owner via EmailJS
+                try {
+                    var result = await sendPaymentVerificationEmail({
+                        name: getCurrentUser() ? getCurrentUser().name : "Customer",
+                        email: document.getElementById("shipping_email") ? document.getElementById("shipping_email").value.trim() : "",
+                        phone: phone,
+                        amount: amount,
+                        ref: ref,
+                        method: "OPAY Transfer"
+                    });
+
+                    if (result.ok) {
+                        if (result.emailSent) {
+                            setVerificationStatus("Payment verification email sent to the owner. Awaiting manual confirmation.");
+                            alert("Payment verification email sent to the owner! They will verify your payment and notify you.");
+                        } else if (result.devMode) {
+                            setVerificationStatus(result.message || "Payment verification request saved.");
+                            alert(result.message || "Payment verification request saved (dev mode).");
+                        } else {
+                            setVerificationStatus(result.message || "Payment verification request sent.");
+                        }
+                    } else {
+                        setVerificationStatus("Could not send verification email.");
+                        alert("Could not send verification email.");
+                    }
+                } catch (err) {
+                    setVerificationButtonLoading(btn, false);
+                    setVerificationStatus("");
+                    console.error(err);
+                    alert("Verification request failed due to network or server error.");
+                } finally {
+                    setVerificationButtonLoading(btn, false);
+                }
+            }
+
+            // ---- Initialize on DOM ready ----
+            function init() {
+                initTheme();
+                initBackToTop();
+                updateAuthUI();
+                updateOrderSummary();
+                setupPaymentOptions();
+
+                // Pre-fill from user profile
+                var user = getCurrentUser();
+                if (user) {
+                    var nameInput = document.getElementById("shipping_name");
+                    var emailInput = document.getElementById("shipping_email");
+                    if (nameInput) nameInput.value = user.name;
+                    if (emailInput) emailInput.value = user.email;
+                }
+            }
+
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", init);
+            } else {
+                init();
+            }
+        })();
+    </script>
 </body>
+
 </html>

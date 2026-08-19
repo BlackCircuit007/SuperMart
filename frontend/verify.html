@@ -69,24 +69,27 @@
     </div>
     <div class="auth-card">
         <h2>Verification Code</h2>
-        <p class="sub">Enter the 6-digit code sent to your email address.</p>
+        <p class="sub" id="verifySubtext">Enter the 6-digit code sent to your email address.</p>
 
-        <!-- Dev mode code display (shown when EmailJS is not configured) -->
-<div id="devCodeBox" style="display:none;background:#fff8e6;border:1px solid #ffd93d;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;">
-    <div style="font-size:12px;font-weight:600;color:#8a6d00;margin-bottom:6px;">DEV MODE - no email configured</div>
-    <div style="font-size:13px;color:#666;margin-bottom:8px;">Your verification code is:</div>
-    <div id="devCodeDisplay" style="font-size:32px;font-weight:800;color:var(--c-primary);letter-spacing:4px;font-family:monospace;">000000</div>
-</div>
+        <!-- Dev mode code display (shown when EmailJS is not configured or email fails) -->
+        <div id="devCodeBox" style="display:none;background:#fff8e6;border:1px solid #ffd93d;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;">
+            <div style="font-size:12px;font-weight:600;color:#8a6d00;margin-bottom:6px;">DEV MODE — no real email was sent</div>
+            <div style="font-size:13px;color:#666;margin-bottom:4px;">Code sent to:</div>
+            <div id="devEmailDisplay" style="font-size:15px;font-weight:700;color:#212121;margin-bottom:10px;word-break:break-all;"></div>
+            <div style="font-size:13px;color:#666;margin-bottom:8px;">Your verification code is:</div>
+            <div id="devCodeDisplay" style="font-size:32px;font-weight:800;color:var(--c-primary);letter-spacing:4px;font-family:monospace;"></div>
+            <div style="font-size:11px;color:#8a6d00;margin-top:10px;">This code is shown locally because EmailJS is not configured. <a href="register.html" style="color:#8a6d00;font-weight:700;">Re-register</a> to try sending a real email.</div>
+        </div>
 
-<form id="verifyForm" onsubmit="verifyCode(); return false;">
-    <div class="code-inputs">
-        <input type="text" id="verification_code" placeholder="Enter 6-digit code" required maxlength="6" minlength="6" pattern="[0-9]{6}">
-    </div>
-    <button type="submit">Verify Account</button>
-</form>
-<div class="resend-link">
-    <a href="register.html">Resend code / Try again</a>
-</div>
+        <form id="verifyForm" onsubmit="verifyCode(); return false;">
+            <div class="code-inputs">
+                <input type="text" id="verification_code" placeholder="Enter 6-digit code" required maxlength="6" minlength="6" pattern="[0-9]{6}">
+            </div>
+            <button type="submit">Verify Account</button>
+        </form>
+        <div class="resend-link">
+            <a href="register.html">Resend code / Try again</a>
+        </div>
     </div>
 </section>
 
@@ -101,13 +104,28 @@
 <script src="js/data.js"></script>
 <script src="js/main.js"></script>
 <script>
-/* Show dev-mode verification code if EmailJS isn't configured */
+/* Show dev-mode verification code + email if EmailJS isn't configured */
 window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+
     try {
         var devCode = localStorage.getItem("dev_verification_code");
+        var devEmail = localStorage.getItem("dev_verification_email");
         var devBox = document.getElementById("devCodeBox");
         if (devCode && devBox) {
             document.getElementById("devCodeDisplay").textContent = devCode;
+            // Show the email the code was sent to
+            var emailDisplay = document.getElementById("devEmailDisplay");
+            if (emailDisplay) {
+                emailDisplay.textContent = devEmail || "your email";
+            }
+            // Update subtext to mention the email
+            var subtext = document.getElementById("verifySubtext");
+            if (subtext && devEmail) {
+                subtext.textContent = "Enter the 6-digit code sent to " + devEmail + ".";
+            }
             devBox.style.display = "block";
         }
     } catch (e) {}
@@ -115,3 +133,17 @@ window.addEventListener("DOMContentLoaded", function () {
 </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

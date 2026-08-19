@@ -787,3 +787,4 @@ function initBackToTop() {
         else btn.classList.remove("visible");
     });
 }
+

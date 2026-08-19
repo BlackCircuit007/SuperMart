@@ -31,16 +31,18 @@ var EMAILJS_STATE = {
     initialized: false
 };
 
+/* ---- Owner email (where payment-verification alerts are sent) ---- */
+/* Set this to your own email address. Falls back to localStorage override. */
+var OWNER_EMAIL = localStorage.getItem("tm_owner_email") || "goodluckiyke2010@gmail.com";
+var OWNER_NAME = "TriumphsMart Owner";
+
 /* ---- Check if EmailJS is properly configured ---- */
+/* All three credentials must be present and non-placeholder. */
 function isEmailJSConfigured() {
-    return EMAILJS_STATE.publicKey &&
-        EMAILJS_STATE.publicKey.indexOf("PLEASE_SET") === -1 &&
-        EMAILJS_STATE.serviceId &&
-        EMAILJS_STATE.serviceId.indexOf("default_service") === -1 &&
-        EMAILJS_STATE.templateId &&
-        EMAILJS_STATE.templateId.indexOf("template_") !== 0 ||
-        // Also allow actual custom templates: a real template ID is user-set
-        (EMAILJS_STATE.publicKey.length > 10 && EMAILJS_STATE.serviceId.length > 3 && EMAILJS_STATE.templateId.length > 3);
+    var hasKey = !!EMAILJS_STATE.publicKey && EMAILJS_STATE.publicKey.length > 10;
+    var hasService = !!EMAILJS_STATE.serviceId && EMAILJS_STATE.serviceId.indexOf("default_service") === -1;
+    var hasTemplate = !!EMAILJS_STATE.templateId && EMAILJS_STATE.templateId.length > 5;
+    return !!(hasKey && hasService && hasTemplate);
 }
 
 /* ---- Initialize EmailJS SDK ---- */
@@ -147,6 +149,88 @@ async function sendLoginNotification(email, userName) {
     } catch (err) {
         console.error("EmailJS login notification failed:", err);
         return false;
+    }
+}
+
+/* ---- Send payment verification email to the OWNER ---- */
+/* Sends the payer's details to the owner's email so they can verify the payment. */
+async function sendPaymentVerificationEmail(details) {
+    if (!isEmailJSConfigured()) {
+        console.log("=== DEV MODE: Payment verification request ===", details);
+        localStorage.setItem("dev_payment_verification", JSON.stringify({
+            name: details.name,
+            phone: details.phone,
+            email: details.email,
+            amount: details.amount,
+            ref: details.ref,
+            method: details.method,
+            timestamp: Date.now()
+        }));
+        return { ok: true, devMode: true, message: "Payment verification request saved (dev mode)." };
+    }
+    if (!EMAILJS_STATE.initialized) {
+        initEmailJS();
+    }
+    try {
+        var result = await emailjs.send(
+            EMAILJS_STATE.serviceId,
+            EMAILJS_STATE.templateId,
+            {
+                to_email: OWNER_EMAIL,
+                to_name: OWNER_NAME,
+                app_name: "TriumphsMart Payment Verification",
+                verification_code: "AMOUNT: " + details.amount + " NGN | REF: " + details.ref + " | PHONE: " + details.phone + " | NAME: " + details.name + " | METHOD: " + details.method,
+                payer_name: details.name,
+                payer_phone: details.phone,
+                payer_email: details.email,
+                payment_amount: details.amount,
+                payment_ref: details.ref,
+                payment_method: details.method
+            }
+        );
+        console.log("Payment verification email sent to owner:", result.status);
+        return { ok: true, emailSent: true };
+    } catch (err) {
+        console.error("Payment verification email failed:", err);
+        // Fallback: store in localStorage so owner can check the request
+        localStorage.setItem("dev_payment_verification", JSON.stringify({
+            name: details.name,
+            phone: details.phone,
+            email: details.email,
+            amount: details.amount,
+            ref: details.ref,
+            method: details.method,
+            timestamp: Date.now()
+        }));
+        return { ok: true, devMode: true, message: "Payment verification saved (email failed — check localStorage)." };
+    }
+}
+
+/* ---- Send order notification email to customer ---- */
+async function sendOrderNotification(orderInfo) {
+    if (!isEmailJSConfigured()) {
+        console.log("=== DEV MODE: Order notification ===", orderInfo);
+        return { ok: true, devMode: true };
+    }
+    if (!EMAILJS_STATE.initialized) {
+        initEmailJS();
+    }
+    try {
+        var result = await emailjs.send(
+            EMAILJS_STATE.serviceId,
+            EMAILJS_STATE.templateId,
+            {
+                to_email: orderInfo.email,
+                to_name: orderInfo.name,
+                verification_code: orderInfo.orderRef,
+                app_name: "TriumphsMart Order #" + orderInfo.orderRef
+            }
+        );
+        console.log("Order notification sent:", result.status);
+        return { ok: true, emailSent: true };
+    } catch (err) {
+        console.error("Order notification failed:", err);
+        return { ok: false, error: err };
     }
 }
 

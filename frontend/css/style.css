@@ -1995,7 +1995,7 @@ body.dark-mode .filter-group select {
     align-items:center;
     justify-content:center;
     background:rgba(2,6,23,0.6);
-    z-index:60;
+    z-index:100;
     opacity:0;
     visibility:hidden;
     transition:opacity 0.3s ease, visibility 0.3s ease;

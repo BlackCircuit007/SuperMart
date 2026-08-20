@@ -1,41 +1,38 @@
 # TriumphsMart — Skin Care & Provisions Store
 
-A responsive, fully frontend-only (HTML/CSS/JS) e-commerce store for skin care and provisions with EmailJS-powered authentication, admin panel, user dashboard, cart, and quick view functionality.
+A full-stack e-commerce store for skin care and provisions with a real backend database, email verification, admin panel with reports and CSV export, and worker management.
 
 ## Features
 
 ### Core Features
 - **Responsive Design** — Fully responsive across all device sizes (mobile, tablet, desktop)
 - **Skin Care + Provisions Only** — Shop is focused on premium skin care products and quality provisions
-- **Dynamic Product Catalog** — All products stored in localStorage, so admin changes persist instantly
-- **Admin Panel** — Login with `admin` / `admin` to add or remove products
+- **Real Database** — All data stored in a JSON file database (`data/triumphmart.json`) on the server
+- **Admin Panel** — Login with `admin@triumphsmart.com` / `admin123`
   - Add products with **5 image upload slots**
-  - Name, description, price, rating, category, and featured flag
+  - Name, description, price, rating, category, stock, and featured flag
   - Remove any product with one click
+  - **Reports tab** — See how many times each product was ordered
+  - **CSV Export** — Export orders and product reports as CSV
+  - **Worker Management** — Add workers who receive generated login codes via email
+  - **Order Management** — View all customer orders
 - **User Dashboard** — Registered users get a personal dashboard showing:
-  - Their profile with profile picture upload
+  - Their profile
   - Cart items and cart value
   - Order history with order references
-- **User Authentication** — Register, email verification, and login using EmailJS
-- **Shopping Cart** — Add to cart, change quantities, remove items, per-user localStorage
+- **User Authentication** — Register with email verification (code sent to email, NOT shown on screen)
+- **Worker Authentication** — Workers log in with a generated login code sent to their email
+- **Shopping Cart** — Add to cart, change quantities, remove items, server-side cart storage
 - **Quick View Modal** — Preview product details without leaving the page
 - **Search & Filters** — Real-time search with debounce, category/price/rating filters
-- **Order Checkout** — Place orders with shipping info and payment method, saved to dashboard
+- **Order Checkout** — Place orders with shipping info and payment method
+- **Email Notifications** — 
+  - Verification code sent to email on registration
+  - Order confirmation sent to customer
+  - Cash on Delivery notification sent to owner
+  - Payment verification email with **Verify/Reject buttons** sent to owner
+  - Worker credentials sent to worker's email
 - **Toast Notifications** — Friendly feedback for all actions
-
-### EmailJS Integration
-Register and login flows use EmailJS (a frontend email service). To configure:
-1. Go to https://dashboard.emailjs.com/ and create an account
-2. Add an Email Service (e.g. connect your Gmail)
-3. Create templates for verification & login
-4. Set your credentials in the browser console:
-```js
-localStorage.setItem("tm_emailjs_service_id", "YOUR_SERVICE_ID");
-localStorage.setItem("tm_emailjs_template_id", "YOUR_VERIFY_TEMPLATE_ID");
-localStorage.setItem("tm_emailjs_login_template_id", "YOUR_LOGIN_TEMPLATE_ID");
-localStorage.setItem("tm_emailjs_public_key", "YOUR_PUBLIC_KEY");
-```
-> **No backend needed** — everything runs client-side.
 
 ## Pages
 
@@ -47,52 +44,73 @@ localStorage.setItem("tm_emailjs_public_key", "YOUR_PUBLIC_KEY");
 | `checkout.html` | Shipping info, payment method, order summary |
 | `finally.html` | Order confirmation with reference number |
 | `login.html` | Login page (also the admin login entry) |
-| `register.html` | Registration with EmailJS verification |
+| `register.html` | Registration with email verification |
 | `verify.html` | Email verification code entry |
 | `dashboard.html` | User dashboard: profile, cart, orders |
-| `admin.html` | Admin panel: add/remove products (admin/admin) |
-| `hidden.html` | Easter egg page |
+| `admin.html` | Admin panel: products, reports, workers, orders |
 
 ## Admin Access
 
-Username: `admin`
-Password: `admin`
+Email: `admin@triumphsmart.com`
+Password: `admin123`
 
-You can log in directly on `admin.html` or via `login.html`.
+## Worker Access
 
-## File Structure
+Workers are added by the admin. Each worker receives:
+- A **username** (generated from their name)
+- A **login code** (e.g., `WK8F3K2A123`)
 
-```
-COPY TO SELL/
-├── README.md
-└── frontend/
-    ├── css/
-    │   └── style.css          # All styles (responsive + dark mode)
-    ├── js/
-    │   ├── config.js          # EmailJS config & email sending
-    │   ├── data.js            # Product database (localStorage backed)
-    │   └── main.js            # Main app logic (auth, cart, admin, rendering)
-    ├── images/                # Static images
-    ├── index.html             # Home page
-    ├── products.html          # Product listing with filters & quick view
-    ├── cart.html              # Shopping cart
-    ├── checkout.html          # Checkout form
-    ├── finally.html           # Order confirmation
-    ├── login.html             # Login page (EmailJS)
-    ├── register.html          # Registration page (EmailJS)
-    ├── verify.html            # Email verification code
-    ├── dashboard.html         # User dashboard
-    ├── admin.html             # Admin panel
-    └── hidden.html            # Easter egg page
-```
+They log in via the worker login section on the login page.
 
 ## How to Run
 
-Simply open `frontend/index.html` in any modern browser. No build step, no server, no backend required.
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Start the server:
+```bash
+npm start
+```
+
+3. Open your browser at:
+```
+http://localhost:3000
+```
+
+## Email Configuration
+
+The app uses Nodemailer with Gmail SMTP. Configure in `.env`:
+
+```
+EMAIL_ADDRESS=your-email@gmail.com
+EMAIL_APP_PASSWORD=your-gmail-app-password
+```
+
+To get a Gmail App Password:
+1. Go to https://myaccount.google.com/security
+2. Enable 2-Step Verification
+3. Go to App Passwords
+4. Generate a new app password for "Mail"
+5. Use that password in `.env`
+
+## Database
+
+All data is stored in `data/triumphmart.json`. This includes:
+- Users (buyers, workers, admin)
+- Products
+- Orders
+- Verification codes
+- Worker login codes
+- Payment verifications
+- Carts
 
 ## Technologies
 
-- HTML5 / CSS3 / JavaScript (ES6)
-- localStorage for persistence
-- EmailJS SDK for email sending
-- CSS Grid & Flexbox for responsive layouts
+- **Backend**: Node.js, Express
+- **Database**: JSON file database (no external DB needed)
+- **Email**: Nodemailer (Gmail SMTP)
+- **Auth**: JWT (JSON Web Tokens)
+- **Frontend**: HTML5 / CSS3 / JavaScript (ES6)
+- **Security**: bcrypt password hashing

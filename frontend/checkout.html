@@ -23,7 +23,7 @@
     <header class="navbar">
         <div class="nav-row">
             <div style="display:flex;align-items:center;gap:12px;">
-                <a href="index.html" class="brand"><span class="brand-mark">SHOP</span><span>TriumphsMart</span></a>
+                <a href="index.html" class="brand"><span class="brand-mark">🛍️</span><span>TriumphsMart</span></a>
                 <div class="nav-links" id="navLinks">
                     <a href="index.html" class="nav-link">Home</a>
                     <a href="products.html" class="nav-link">Shop</a>
@@ -32,12 +32,12 @@
             </div>
             <div class="nav-actions">
                 <a href="cart.html" class="nav-action">
-                    <span class="action-icon">CART</span>
+                    <span class="action-icon">🛒</span>
                     <span>Cart</span>
                     <span class="badge" id="cart-count">0</span>
                 </a>
                 <a href="login.html" class="nav-action" id="authAction">
-                    <span class="action-icon">USER</span>
+                    <span class="action-icon">👤</span>
                     <span>Account</span>
                 </a>
                 <button class="signup-btn" id="signupBtn" onclick="window.location='register.html'">Sign Up</button>
@@ -96,7 +96,7 @@
                             <span class="pay-label">Cash on Delivery</span>
                         </label>
                         <label class="payment-option" for="card">
-                            <input type="radio" name="payment" id="card" value="card">
+                            <input type="radio" name="payment" id="card" value="transfer">
                             <button type="button" class="pay-label" id="becomePayerBtn" style="background:none;border:none;color:inherit;padding:0;cursor:pointer;width:100%;">Transfer</button>
                         </label>
                     </div>
@@ -106,16 +106,15 @@
                         <div class="payment-modal__panel">
                             <button type="button" class="payment-modal__close" id="closePaymentModal" title="Close">&times;</button>
                             <h3>Transaction Panel</h3>
-                            <p>Send payment to the OPAY account below to unlock premium features and access the Payer
-                                Dashboard.</p>
+                            <p>Send payment to the OPAY account below to complete your order.</p>
                             <p><strong>OPAY Number:</strong> 7039245529</p>
                             <p>Enter the details of your transaction below so we can verify it.</p>
 
                             <label for="payerPhoneInput">Your Phone (used for verification)</label>
                             <input id="payerPhoneInput" type="text" placeholder="e.g. 08012345678" />
 
-                            <label for="paymentAmountInput">Amount Paid (NGN) — Fixed price</label>
-                            <input id="paymentAmountInput" type="number" value="5000" readonly />
+                            <label for="paymentAmountInput">Amount Paid (NGN)</label>
+                            <input id="paymentAmountInput" type="number" placeholder="Enter amount" />
 
                             <label for="paymentRefInput">Transaction Reference</label>
                             <input id="paymentRefInput" type="text" placeholder="Provider transaction reference" />
@@ -125,8 +124,6 @@
                                 <button type="button" id="closePaymentModalBtn" class="checkout-btn" style="flex:1;">Close</button>
                             </div>
                             <p id="paymentStatus" class="payment-status" aria-live="polite"></p>
-                            <p style="margin-top:10px;font-size:0.9rem;color:var(--c-text-secondary)">Note: For a real deployment, you
-                                must verify payments server-side with OPAY or your payment provider.</p>
                         </div>
                     </div>
 
@@ -151,8 +148,7 @@
         </div>
     </footer>
 
-    <script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
-    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
     <script src="js/data.js"></script>
     <script src="js/main.js"></script>
     <script>
@@ -166,7 +162,7 @@
             var CLOSE_PAYMENT_MODAL_IDS = ["closePaymentModal", "closePaymentModalBtn"];
             var PAYMENT_STATUS_ID = "paymentStatus";
 
-            // ---- Open / close payment modal (class-based, smooth) ----
+            // ---- Open / close payment modal ----
             function openPaymentModal() {
                 var modal = document.getElementById(PAYMENT_MODAL_ID);
                 if (!modal) return;
@@ -182,14 +178,12 @@
                 setVerificationStatus("");
             }
 
-            // ---- Helper: show/hide loading state on the verify button ----
             function setVerificationButtonLoading(btn, loading) {
                 if (!btn) return;
                 btn.disabled = !!loading;
                 btn.textContent = loading ? "Sending..." : "Verify Payment";
             }
 
-            // ---- Helper: update status text ----
             function setVerificationStatus(msg) {
                 var el = document.getElementById(PAYMENT_STATUS_ID);
                 if (!el) return;
@@ -197,11 +191,10 @@
             }
 
             // ---- Update order summary ----
-            function updateOrderSummary() {
+            async function updateOrderSummary() {
                 var user = getCurrentUser();
                 if (!user) return;
-                var key = "cart_" + user.email;
-                var cart = JSON.parse(localStorage.getItem(key)) || [];
+                var cart = await getCartItems();
                 var subtotal = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
                 var subEl = document.getElementById("order-subtotal");
                 var totalEl = document.getElementById("order-total");
@@ -224,47 +217,41 @@
                     return;
                 }
 
-                var key = "cart_" + user.email;
-                var cart = JSON.parse(localStorage.getItem(key)) || [];
+                var cart = await getCartItems();
                 if (cart.length === 0) {
                     showToast("Your cart is empty", "error");
                     window.location.href = "products.html";
                     return;
                 }
 
-                var orderRef = "TM" + Date.now().toString().slice(-8);
                 var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
+                var paymentMethod = document.querySelector("input[name='payment']:checked").value;
 
-                // Save order to user's dashboard
-                var ordersKey = "orders_" + user.email;
-                var orders = JSON.parse(localStorage.getItem(ordersKey)) || [];
-                orders.unshift({
-                    ref: orderRef,
-                    date: new Date().toLocaleString(),
-                    total: total,
-                    items: cart,
-                    name: name,
-                    phone: phone,
-                    address: address,
-                    payment: document.querySelector("input[name='payment']:checked").value
-                });
-                localStorage.setItem(ordersKey, JSON.stringify(orders));
+                var submitBtn = document.querySelector(".checkout-btn[onclick='finalizeCheckout()']");
+                if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Placing order..."; }
 
-                // Send order notification via EmailJS
                 try {
-                    await sendOrderNotification({
-                        email: email,
-                        name: name,
-                        orderRef: orderRef
+                    var result = await apiPlaceOrder({
+                        customer_name: name,
+                        customer_email: email,
+                        customer_phone: phone,
+                        shipping_address: address,
+                        payment_method: paymentMethod,
+                        items: cart,
+                        total: total
                     });
-                } catch (err) {
-                    console.warn("Order email failed, continuing:", err);
-                }
 
-                // Clear cart
-                localStorage.removeItem(key);
-                updateCartCount();
-                window.location.href = "finally.html?ref=" + orderRef;
+                    // Clear cart
+                    await apiSaveCart([]);
+                    updateCartCount();
+
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+                    showToast("Order placed successfully!", "success");
+                    window.location.href = "finally.html?ref=" + result.orderRef;
+                } catch (err) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+                    showToast(err.message || "Failed to place order", "error");
+                }
             }
 
             // ---- Payment option selection highlighting ----
@@ -285,13 +272,11 @@
                 var target = e.target;
                 if (!target) return;
 
-                // Open payment modal
                 if (target.id === BECOME_PAYER_BTN_ID) {
                     openPaymentModal();
                     return;
                 }
 
-                // Close modal buttons
                 for (var i = 0; i < CLOSE_PAYMENT_MODAL_IDS.length; i++) {
                     if (target.id === CLOSE_PAYMENT_MODAL_IDS[i]) {
                         closePaymentModal();
@@ -299,13 +284,11 @@
                     }
                 }
 
-                // Close modal when clicking the overlay/backdrop
                 if (target.id === PAYMENT_MODAL_ID) {
                     closePaymentModal();
                     return;
                 }
 
-                // Verify payment button
                 if (target.id === CONFIRM_PAID_BTN_ID) {
                     handleVerifyPayment();
                 }
@@ -321,7 +304,7 @@
                 }
             });
 
-            // ---- Payment verification: send email to owner ----
+            // ---- Payment verification: send to backend ----
             async function handleVerifyPayment() {
                 var phone = document.getElementById("payerPhoneInput") ? document.getElementById("payerPhoneInput").value.trim() : "";
                 var amount = document.getElementById("paymentAmountInput") ? document.getElementById("paymentAmountInput").value.trim() : "";
@@ -333,45 +316,26 @@
                     return;
                 }
 
-                // enforce fixed price
-                if (String(amount) !== "5000") {
-                    alert("Payment must be exactly 5000 NGN.");
-                    return;
-                }
-
                 setVerificationButtonLoading(btn, true);
                 setVerificationStatus("Sending your verification request. Please wait...");
 
-                // send payment verification email to the owner via EmailJS
                 try {
-                    var result = await sendPaymentVerificationEmail({
-                        name: getCurrentUser() ? getCurrentUser().name : "Customer",
-                        email: document.getElementById("shipping_email") ? document.getElementById("shipping_email").value.trim() : "",
-                        phone: phone,
-                        amount: amount,
-                        ref: ref,
-                        method: "OPAY Transfer"
+                    var result = await apiSubmitPaymentVerification({
+                        order_ref: "PENDING-" + Date.now().toString().slice(-8),
+                        payer_name: getCurrentUser() ? getCurrentUser().name : "Customer",
+                        payer_email: document.getElementById("shipping_email") ? document.getElementById("shipping_email").value.trim() : "",
+                        payer_phone: phone,
+                        amount: parseFloat(amount),
+                        transaction_ref: ref
                     });
 
-                    if (result.ok) {
-                        if (result.emailSent) {
-                            setVerificationStatus("Payment verification email sent to the owner. Awaiting manual confirmation.");
-                            alert("Payment verification email sent to the owner! They will verify your payment and notify you.");
-                        } else if (result.devMode) {
-                            setVerificationStatus(result.message || "Payment verification request saved.");
-                            alert(result.message || "Payment verification request saved (dev mode).");
-                        } else {
-                            setVerificationStatus(result.message || "Payment verification request sent.");
-                        }
-                    } else {
-                        setVerificationStatus("Could not send verification email.");
-                        alert("Could not send verification email.");
-                    }
+                    setVerificationStatus("Payment verification email sent to the owner. Awaiting manual confirmation.");
+                    alert("Payment verification email sent to the owner! They will verify your payment and notify you.");
                 } catch (err) {
                     setVerificationButtonLoading(btn, false);
                     setVerificationStatus("");
                     console.error(err);
-                    alert("Verification request failed due to network or server error.");
+                    alert(err.message || "Verification request failed due to network or server error.");
                 } finally {
                     setVerificationButtonLoading(btn, false);
                 }

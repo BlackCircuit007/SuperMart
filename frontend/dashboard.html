@@ -170,24 +170,17 @@
             color: var(--c-text-secondary);
         }
         .empty-state .big { font-size: 48px; margin-bottom: 10px; }
-        .upload-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: #f5f7f9;
-            border: 1px solid var(--c-border);
-            border-radius: 8px;
-            padding: 6px 12px;
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
             font-size: 12px;
-            color: var(--c-text);
-            cursor: pointer;
-            margin-top: 10px;
+            font-weight: 700;
+            margin-top: 8px;
         }
-        body.dark-mode .upload-badge {
-            background: #2a2a2a;
-            border-color: var(--c-dark-border);
-            color: var(--c-dark-text);
-        }
+        .role-badge.buyer { background: #e3f2fd; color: #1565c0; }
+        .role-badge.worker { background: #fff3e0; color: #e65100; }
+        .role-badge.admin { background: #fce4ec; color: #c62828; }
         @media (max-width: 900px) {
             .dash-layout { grid-template-columns: 1fr; }
             .stats-grid { grid-template-columns: repeat(3, 1fr); }
@@ -275,10 +268,7 @@
                 <div class="dash-avatar" id="dashAvatar">U</div>
                 <h3 id="dashName">User</h3>
                 <p id="dashEmail">user@email.com</p>
-                <label class="upload-badge">
-                    📷 Change Photo
-                    <input type="file" accept="image/*" style="display:none;" onchange="uploadProfilePicture(this)">
-                </label>
+                <span class="role-badge" id="dashRole">Buyer</span>
             </div>
             <nav class="dash-nav">
                 <a href="#" class="active" data-tab="overview">📊 Overview</a>
@@ -349,13 +339,13 @@
     </div>
 </footer>
 
-<script src="js/config.js"></script>
+<script src="js/api.js"></script>
 <script src="js/data.js"></script>
 <script src="js/main.js"></script>
 <script>
 /* ===== Dashboard specific logic ===== */
 
-function renderDashboard() {
+async function renderDashboard() {
     var user = getCurrentUser();
     if (!user) {
         document.getElementById("dashApp").style.display = "none";
@@ -371,17 +361,18 @@ function renderDashboard() {
     document.getElementById("dashEmail").textContent = user.email;
     document.getElementById("welcomeName").textContent = user.name.split(" ")[0];
 
+    // Role badge
+    var roleBadge = document.getElementById("dashRole");
+    var roleText = user.role === 'admin' ? 'Admin' : user.role === 'worker' ? 'Worker' : 'Buyer';
+    roleBadge.textContent = roleText;
+    roleBadge.className = 'role-badge ' + (user.role || 'buyer');
+
     var avatar = document.getElementById("dashAvatar");
-    if (user.profilePic && user.profilePic.image) {
-        avatar.innerHTML = '<img src="' + user.profilePic.image + '" alt="Profile">';
-    } else {
-        avatar.textContent = (user.profilePic && user.profilePic.initials) || "U";
-        avatar.style.background = (user.profilePic && user.profilePic.color) || "#ff3b20";
-    }
+    var initials = user.name.split(" ").map(function (n) { return n[0]; }).join("").slice(0, 2).toUpperCase();
+    avatar.textContent = initials;
 
     // Cart stats
-    var key = "cart_" + user.email;
-    var cart = JSON.parse(localStorage.getItem(key)) || [];
+    var cart = await getCartItems();
     var totalItems = cart.reduce(function (s, i) { return s + i.quantity; }, 0);
     var totalValue = cart.reduce(function (s, i) { return s + (i.price * i.quantity); }, 0);
 
@@ -405,23 +396,28 @@ function renderDashboard() {
     }
 
     // Orders
-    var ordersKey = "orders_" + user.email;
-    var orders = JSON.parse(localStorage.getItem(ordersKey)) || [];
-    document.getElementById("statOrders").textContent = orders.length;
+    try {
+        var orders = await apiGetMyOrders();
+        document.getElementById("statOrders").textContent = orders.length;
 
-    var ordersList = document.getElementById("dashOrdersList");
-    if (orders.length === 0) {
-        ordersList.innerHTML = '<div class="empty-state"><div class="big">📦</div><p>You haven\'t placed any orders yet.</p></div>';
-    } else {
-        ordersList.innerHTML = "";
-        orders.forEach(function (order) {
-            var div = document.createElement("div");
-            div.className = "dash-order-item";
-            div.innerHTML =
-                '<div><div class="order-ref">' + order.ref + '</div><div class="order-date">' + order.date + '</div></div>' +
-                '<div class="order-total">₦' + Number(order.total).toLocaleString() + '</div>';
-            ordersList.appendChild(div);
-        });
+        var ordersList = document.getElementById("dashOrdersList");
+        if (orders.length === 0) {
+            ordersList.innerHTML = '<div class="empty-state"><div class="big">📦</div><p>You haven\'t placed any orders yet.</p></div>';
+        } else {
+            ordersList.innerHTML = "";
+            orders.forEach(function (order) {
+                var div = document.createElement("div");
+                div.className = "dash-order-item";
+                div.innerHTML =
+                    '<div><div class="order-ref">' + order.order_ref + '</div><div class="order-date">' + new Date(order.created_at).toLocaleString() + '</div></div>' +
+                    '<div class="order-total">₦' + Number(order.total).toLocaleString() + '</div>';
+                ordersList.appendChild(div);
+            });
+        }
+    } catch (err) {
+        console.error("Failed to load orders:", err);
+        document.getElementById("statOrders").textContent = "0";
+        document.getElementById("dashOrdersList").innerHTML = '<div class="empty-state"><p>Failed to load orders.</p></div>';
     }
 }
 

@@ -177,11 +177,11 @@
     </div>
 </footer>
 
-<script src="js/config.js"></script>
+<script src="js/api.js"></script>
 <script src="js/data.js"></script>
 <script src="js/main.js"></script>
 <script>
-function renderCart() {
+async function renderCart() {
     var user = getCurrentUser();
     var container = document.getElementById("cart-items");
     var totalEl = document.getElementById("total");
@@ -190,20 +190,19 @@ function renderCart() {
     if (!container) return;
 
     if (!user) {
-        container.innerHTML = '<div class="empty-cart"><div class="big">LOCK</div><h3>Please login</h3><p style="margin-top:8px;">You need to log in to view your cart.</p><a href="login.html" class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;">Login</a></div>';
+        container.innerHTML = '<div class="empty-cart"><div class="big">🔒</div><h3>Please login</h3><p style="margin-top:8px;">You need to log in to view your cart.</p><a href="login.html" class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;">Login</a></div>';
         if (totalEl) totalEl.innerText = "NGN 0";
         if (subtotalEl) subtotalEl.innerText = "NGN 0";
         if (cartInline) cartInline.textContent = "0";
         return;
     }
 
-    var key = "cart_" + user.email;
-    var cart = JSON.parse(localStorage.getItem(key)) || [];
+    var cart = await getCartItems();
     var total = 0;
     var count = 0;
 
     if (cart.length === 0) {
-        container.innerHTML = '<div class="empty-cart"><div class="big">CART</div><h3>Your cart is empty</h3><p style="margin-top:8px;">Looks like you haven\'t added anything yet. Start shopping!</p><a href="products.html" class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;">Start Shopping</a></div>';
+        container.innerHTML = '<div class="empty-cart"><div class="big">🛒</div><h3>Your cart is empty</h3><p style="margin-top:8px;">Looks like you haven\'t added anything yet. Start shopping!</p><a href="products.html" class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;">Start Shopping</a></div>';
         if (totalEl) totalEl.innerText = "NGN 0";
         if (subtotalEl) subtotalEl.innerText = "NGN 0";
         if (cartInline) cartInline.textContent = "0";
@@ -219,7 +218,7 @@ function renderCart() {
 
         var imgHtml = item.image && (String(item.image).indexOf("data:") === 0 || String(item.image).indexOf("http") === 0)
             ? '<img src="' + item.image + '" alt="' + item.name + '">'
-            : '<span style="font-size:34px;">' + (item.image || "SHOP") + "</span>";
+            : '<span style="font-size:34px;">' + (item.image || "🛍️") + "</span>";
 
         card.innerHTML =
             '<div class="item-img">' + imgHtml + '</div>' +

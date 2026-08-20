@@ -20,7 +20,7 @@
 <header class="navbar">
     <div class="nav-row">
         <div style="display:flex;align-items:center;gap:12px;">
-            <a href="index.html" class="brand"><span class="brand-mark">SHOP</span><span>TriumphsMart</span></a>
+            <a href="index.html" class="brand"><span class="brand-mark">🛍️</span><span>TriumphsMart</span></a>
             <div class="nav-links" id="navLinks">
                 <a href="index.html" class="nav-link">Home</a>
                 <a href="products.html" class="nav-link">Shop</a>
@@ -29,7 +29,7 @@
         </div>
         <div class="nav-actions">
             <a href="cart.html" class="nav-action">
-                <span class="action-icon">CART</span>
+                <span class="action-icon">🛒</span>
                 <span>Cart</span>
                 <span class="badge" id="cart-count">0</span>
             </a>
@@ -52,7 +52,6 @@
         <a href="cart.html">Cart</a>
         <a href="login.html">Login</a>
         <a href="register.html">Register</a>
-        <a href="admin.html">Admin</a>
     </div>
 </nav>
 
@@ -62,24 +61,14 @@
 
 <section class="auth-split">
     <div class="auth-illustration">
-        <div class="big">EMAIL</div>
+        <div class="big">📧</div>
         <h2 style="color:#fff;font-size:1.8rem;font-weight:800;">Check your inbox</h2>
         <p>We've sent a 6-digit verification code to your email. Enter it below to complete registration.</p>
-        <p style="color:rgba(255,255,255,0.85);">Didn't receive it? Check your spam folder or <a href="register.html" style="color:#fff;font-weight:700;text-decoration:underline;">resend</a>.</p>
+        <p style="color:rgba(255,255,255,0.85);">Didn't receive it? Check your spam folder or <a href="register.html" style="color:#fff;font-weight:700;text-decoration:underline;">register again</a>.</p>
     </div>
     <div class="auth-card">
         <h2>Verification Code</h2>
         <p class="sub" id="verifySubtext">Enter the 6-digit code sent to your email address.</p>
-
-        <!-- Dev mode code display (shown when EmailJS is not configured or email fails) -->
-        <div id="devCodeBox" style="display:none;background:#fff8e6;border:1px solid #ffd93d;border-radius:10px;padding:14px;margin-bottom:16px;text-align:center;">
-            <div style="font-size:12px;font-weight:600;color:#8a6d00;margin-bottom:6px;">DEV MODE — no real email was sent</div>
-            <div style="font-size:13px;color:#666;margin-bottom:4px;">Code sent to:</div>
-            <div id="devEmailDisplay" style="font-size:15px;font-weight:700;color:#212121;margin-bottom:10px;word-break:break-all;"></div>
-            <div style="font-size:13px;color:#666;margin-bottom:8px;">Your verification code is:</div>
-            <div id="devCodeDisplay" style="font-size:32px;font-weight:800;color:var(--c-primary);letter-spacing:4px;font-family:monospace;"></div>
-            <div style="font-size:11px;color:#8a6d00;margin-top:10px;">This code is shown locally because EmailJS is not configured. <a href="register.html" style="color:#8a6d00;font-weight:700;">Re-register</a> to try sending a real email.</div>
-        </div>
 
         <form id="verifyForm" onsubmit="verifyCode(); return false;">
             <div class="code-inputs">
@@ -99,51 +88,50 @@
     </div>
 </footer>
 
-<script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
-<script src="js/config.js"></script>
+<script src="js/api.js"></script>
 <script src="js/data.js"></script>
 <script src="js/main.js"></script>
 <script>
-/* Show dev-mode verification code + email if EmailJS isn't configured */
+/* ===== Verify with real backend ===== */
+async function verifyCode() {
+    var codeInput = document.getElementById("verification_code");
+    var enteredCode = codeInput ? codeInput.value.trim() : "";
+    if (!enteredCode || enteredCode.length !== 6) { showToast("Please enter the 6-digit verification code", "error"); return; }
+
+    var email = localStorage.getItem("pending_verify_email");
+    if (!email) {
+        showToast("No pending registration found. Please register again.", "error");
+        setTimeout(function () { window.location.href = "register.html"; }, 1500);
+        return;
+    }
+
+    var submitBtn = document.querySelector("#verifyForm button[type='submit']");
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Verifying..."; }
+
+    try {
+        var result = await apiVerify(email, enteredCode);
+        localStorage.removeItem("pending_verify_email");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Verify Account"; }
+        showToast("Account verified successfully! Welcome!", "success");
+        setTimeout(function () { window.location.href = "dashboard.html"; }, 1500);
+    } catch (err) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Verify Account"; }
+        showToast(err.message || "Wrong verification code. Please try again.", "error");
+    }
+}
+
 window.addEventListener("DOMContentLoaded", function () {
     initTheme();
     initBackToTop();
     updateAuthUI();
 
-    try {
-        var devCode = localStorage.getItem("dev_verification_code");
-        var devEmail = localStorage.getItem("dev_verification_email");
-        var devBox = document.getElementById("devCodeBox");
-        if (devCode && devBox) {
-            document.getElementById("devCodeDisplay").textContent = devCode;
-            // Show the email the code was sent to
-            var emailDisplay = document.getElementById("devEmailDisplay");
-            if (emailDisplay) {
-                emailDisplay.textContent = devEmail || "your email";
-            }
-            // Update subtext to mention the email
-            var subtext = document.getElementById("verifySubtext");
-            if (subtext && devEmail) {
-                subtext.textContent = "Enter the 6-digit code sent to " + devEmail + ".";
-            }
-            devBox.style.display = "block";
-        }
-    } catch (e) {}
+    // Show which email the code was sent to
+    var email = localStorage.getItem("pending_verify_email");
+    var subtext = document.getElementById("verifySubtext");
+    if (subtext && email) {
+        subtext.textContent = "Enter the 6-digit code sent to " + email + ".";
+    }
 });
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-

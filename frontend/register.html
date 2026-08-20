@@ -52,7 +52,6 @@
         <a href="products.html">Shop</a>
         <a href="cart.html">Cart</a>
         <a href="login.html">Login</a>
-        <!-- <a href="admin.html">Admin</a> -->
     </div>
 </nav>
 
@@ -94,9 +93,47 @@
     </div>
 </footer>
 
-<script src="https://cdn.emailjs.com/sdk/latest/email.min.js"></script>
-<script src="js/config.js"></script>
+<script src="js/api.js"></script>
 <script src="js/data.js"></script>
 <script src="js/main.js"></script>
+<script>
+/* ===== Register with real backend ===== */
+async function registerUser() {
+    var nameInput = document.getElementById("full_name");
+    var emailInput = document.getElementById("email");
+    var passwordInput = document.getElementById("password");
+    var termsInput = document.getElementById("terms");
+    var name = nameInput ? nameInput.value.trim() : "";
+    var email = emailInput ? emailInput.value.trim() : "";
+    var password = passwordInput ? passwordInput.value.trim() : "";
+
+    if (!name || !email || !password) { showToast("Please fill in all fields", "error"); return; }
+    if (!termsInput || !termsInput.checked) { showToast("Please agree to the Terms and Privacy Policy", "error"); return; }
+    var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) { showToast("Please enter a valid email address", "error"); return; }
+    if (password.length < 6) { showToast("Password must be at least 6 characters", "error"); return; }
+
+    var submitBtn = document.querySelector("#registerForm button[type='submit']");
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Sending verification code..."; }
+
+    try {
+        var result = await apiRegister(name, email, password);
+        // Store email for the verify page
+        localStorage.setItem("pending_verify_email", email);
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Create Account"; }
+        showToast("Verification code sent to your email!", "success");
+        setTimeout(function () { window.location.href = "verify.html"; }, 1500);
+    } catch (err) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Create Account"; }
+        showToast(err.message || "Registration failed. Please try again.", "error");
+    }
+}
+
+window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+});
+</script>
 </body>
 </html>

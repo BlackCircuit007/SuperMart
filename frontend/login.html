@@ -123,7 +123,7 @@ async function loginUser() {
             setTimeout(function () { window.location.href = "admin.html"; }, 800);
         } else if (data.user.role === 'worker') {
             showToast("Welcome " + data.user.name + "!", "success");
-            setTimeout(function () { window.location.href = "dashboard.html"; }, 800);
+            setTimeout(function () { window.location.href = "worker.html"; }, 800);
         } else {
             showToast("Welcome back " + data.user.name + "!", "success");
             setTimeout(function () { window.location.href = "dashboard.html"; }, 1200);
@@ -144,7 +144,7 @@ async function workerLogin() {
     try {
         var data = await apiLogin('', '', code);
         showToast("Welcome " + data.user.name + "!", "success");
-        setTimeout(function () { window.location.href = "dashboard.html"; }, 800);
+        setTimeout(function () { window.location.href = "worker.html"; }, 800);
     } catch (err) {
         showToast(err.message || "Invalid worker login code", "error");
     }

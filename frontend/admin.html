@@ -180,6 +180,28 @@
             object-fit: cover;
             border-radius: 8px;
         }
+        .image-upload-slot .slot-label {
+            position: absolute;
+            bottom: 4px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            color: #999;
+            font-weight: 600;
+            pointer-events: none;
+        }
+        .image-upload-slot .slot-label {
+            position: absolute;
+            bottom: 4px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            color: #999;
+            font-weight: 600;
+            pointer-events: none;
+        }
 
         /* Product list */
         .admin-product-item {
@@ -612,12 +634,13 @@
                     <p class="sub">Fill in the details below to add a new product to the store.</p>
 
                     <label>Product Images (up to 5)</label>
+                    <p class="sub" style="margin: 0 0 8px; font-size: 13px;">Upload up to 5 images. <strong>The first image</strong> is the main product photo (shown on product cards). <strong>Images 2-5</strong> are gallery images shown in the product viewer. At least 1 image is required.</p>
                     <div class="image-upload-grid" id="imageUploadGrid">
-                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 0)"></div>
-                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 1)"></div>
-                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 2)"></div>
-                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 3)"></div>
-                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 4)"></div>
+                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 0)"><small class="slot-label">Main Photo</small></div>
+                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 1)"><small class="slot-label">Gallery 1</small></div>
+                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 2)"><small class="slot-label">Gallery 2</small></div>
+                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 3)"><small class="slot-label">Gallery 3</small></div>
+                        <div class="image-upload-slot"><span class="plus">+</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewAdminImage(this, 4)"><small class="slot-label">Gallery 4</small></div>
                     </div>
 
                     <label>Category</label>

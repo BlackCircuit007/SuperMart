@@ -353,6 +353,18 @@ async function renderDashboard() {
         return;
     }
 
+    // Workers use the worker dashboard, not the customer dashboard
+    if (user.role === 'worker') {
+        window.location.href = 'worker.html';
+        return;
+    }
+
+    // Workers use the worker dashboard, not the customer dashboard
+    if (user.role === 'worker') {
+        window.location.href = 'worker.html';
+        return;
+    }
+
     document.getElementById("dashApp").style.display = "block";
     document.getElementById("notLoggedIn").style.display = "none";
 

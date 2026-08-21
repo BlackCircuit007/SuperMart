@@ -35,6 +35,7 @@ async function sendVerificationEmail(toEmail, toName, code) {
                         </div>
                     </div>
                     <p style="color: #999; font-size: 13px;">This code will expire in 10 minutes. If you didn't request this, please ignore this email.</p>
+                    <p style="color: #999; font-size: 13px; text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;"><strong>📥 Can't find this email?</strong><br>Please check your Spam / Junk / Promotions folder — verification emails sometimes end up there.</p>
                 </div>
                 <div style="text-align: center; padding: 20px; color: #999; font-size: 12px;">
                     <p>© ${new Date().getFullYear()} ${STORE_NAME}. All rights reserved.</p>

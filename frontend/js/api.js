@@ -93,6 +93,13 @@ async function apiVerify(email, code) {
     return data;
 }
 
+async function apiResendVerification(email) {
+    return apiRequest('/api/verify/resend', {
+        method: 'POST',
+        body: JSON.stringify({ email })
+    });
+}
+
 async function apiLogin(email, password, loginCode) {
     const data = await apiRequest('/api/login', {
         method: 'POST',
@@ -237,7 +244,9 @@ function updateAuthUI() {
         if (authAction) authAction.style.display = 'none';
         if (signupBtn) signupBtn.style.display = 'none';
         if (mobileLoginLink) {
-            mobileLoginLink.href = 'dashboard.html';
+            // Workers link to worker.html, customers link to dashboard.html
+            var dashHref = user.role === 'worker' ? 'worker.html' : 'dashboard.html';
+            mobileLoginLink.href = dashHref;
             mobileLoginLink.textContent = 'My Dashboard';
         }
         if (navActions) {
@@ -245,8 +254,9 @@ function updateAuthUI() {
             div.id = 'profileContainer';
             div.style.cssText = 'display:inline-flex;align-items:center;gap:6px;';
             const initials = (user.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+            var profileHref = user.role === 'worker' ? 'worker.html' : 'dashboard.html';
             div.innerHTML =
-                '<a href="dashboard.html" class="nav-action">' +
+                '<a href="' + profileHref + '" class="nav-action">' +
                 '<span class="action-icon">👤</span>' +
                 '<span>' + (user.name || 'User').split(' ')[0] + '</span>' +
                 '</a>' +

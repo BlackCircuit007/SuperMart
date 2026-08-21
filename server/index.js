@@ -47,6 +47,15 @@ function workerOrAdminRequired(req, res, next) {
 }
 
 // ===== Helper functions =====
+// Send email in the background without blocking the response.
+// Prevents "failed to fetch" when Gmail SMTP is slow or unreachable.
+function sendEmailInBackground(emailPromise) {
+    Promise.race([
+        emailPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timed out')), 10000))
+    ]).catch(err => console.error('Background email error:', err.message));
+}
+
 function generateOrderRef() {
     return 'TM' + Date.now().toString().slice(-8) + Math.floor(Math.random() * 100);
 }
@@ -74,7 +83,7 @@ app.post('/api/register', async (req, res) => {
         }
 
         // Check if user exists
-        const existing = db.findBy('users', u => u.email === email.toLowerCase());
+        const existing = await db.findBy('users', u => u.email === email.toLowerCase());
         if (existing) {
             return res.status(400).json({ error: 'Email already registered' });
         }
@@ -83,7 +92,7 @@ app.post('/api/register', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Create user (unverified)
-        const user = db.insert('users', {
+        const user = await db.insert('users', {
             name,
             email: email.toLowerCase(),
             password: hashedPassword,
@@ -97,7 +106,7 @@ app.post('/api/register', async (req, res) => {
         const code = String(Math.floor(100000 + Math.random() * 900000));
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-        db.insert('verification_codes', {
+        await db.insert('verification_codes', {
             email: email.toLowerCase(),
             code,
             purpose: 'register',
@@ -106,16 +115,13 @@ app.post('/api/register', async (req, res) => {
             created_at: new Date().toISOString()
         });
 
-        // Send verification email
-        try {
-            await emailService.sendVerificationEmail(email, name, code);
-        } catch (emailErr) {
-            console.error('Email sending failed:', emailErr);
-        }
+        // Send verification email in the background (don't block the response)
+        sendEmailInBackground(emailService.sendVerificationEmail(email, name, code));
 
         res.status(201).json({
-            message: 'Registration successful. Check your email for the verification code.',
-            userId: user.id
+            message: 'Registration successful. Check your email (and Spam/Junk folder) for the verification code.',
+            userId: user.id,
+            emailSent: true
         });
     } catch (err) {
         console.error('Register error:', err);
@@ -124,15 +130,15 @@ app.post('/api/register', async (req, res) => {
 });
 
 // Verify email code
-app.post('/api/verify', (req, res) => {
+app.post('/api/verify', async (req, res) => {
     try {
         const { email, code } = req.body;
         if (!email || !code) {
             return res.status(400).json({ error: 'Email and code are required' });
         }
 
-        const records = db.findAll('verification_codes', vc =>
-            vc.email === email.toLowerCase() && vc.code === code && vc.purpose === 'register' && vc.used === 0
+        const records = await db.findAll('verification_codes', vc =>
+            vc.email === email.toLowerCase() && vc.code === code && vc.purpose === 'register' && Number(vc.used) === 0
         );
         const record = records[records.length - 1];
 
@@ -146,12 +152,12 @@ app.post('/api/verify', (req, res) => {
         }
 
         // Mark code as used
-        db.update('verification_codes', record.id, { used: 1 });
+        await db.update('verification_codes', record.id, { used: 1 });
 
         // Mark user as verified
-        const user = db.findBy('users', u => u.email === email.toLowerCase());
+        const user = await db.findBy('users', u => u.email === email.toLowerCase());
         if (user) {
-            db.update('users', user.id, { is_verified: 1 });
+            await db.update('users', user.id, { is_verified: 1 });
         }
 
         // Generate token
@@ -177,6 +183,49 @@ app.post('/api/verify', (req, res) => {
     }
 });
 
+// Resend verification code
+app.post('/api/verify/resend', async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required' });
+        }
+
+        const user = await db.findBy('users', u => u.email === email.toLowerCase());
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (Number(user.is_verified) === 1) {
+            return res.status(400).json({ error: 'Account is already verified' });
+        }
+
+        // Generate new verification code
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+        await db.insert('verification_codes', {
+            email: email.toLowerCase(),
+            code,
+            purpose: 'register',
+            expires_at: expiresAt,
+            used: 0,
+            created_at: new Date().toISOString()
+        });
+
+        // Send verification email in the background (don't block the response)
+        sendEmailInBackground(emailService.sendVerificationEmail(email, user.name, code));
+
+        res.json({
+            message: 'Verification code resent. Check your email (and Spam/Junk folder).',
+            emailSent: true
+        });
+    } catch (err) {
+        console.error('Resend verification error:', err);
+        res.status(500).json({ error: 'Server error during resend' });
+    }
+});
+
 // Login (buyers, workers, admin)
 app.post('/api/login', async (req, res) => {
     try {
@@ -184,15 +233,15 @@ app.post('/api/login', async (req, res) => {
 
         // Check if it's a worker login with code
         if (loginCode) {
-            const workerCode = db.findBy('worker_codes', wc => wc.login_code === loginCode && wc.is_used === 0);
+        const workerCode = await db.findBy('worker_codes', wc => wc.login_code === loginCode && Number(wc.is_used) === 0);
             if (!workerCode) {
                 return res.status(400).json({ error: 'Invalid login code' });
             }
 
             // Mark code as used
-            db.update('worker_codes', workerCode.id, { is_used: 1 });
+            await db.update('worker_codes', workerCode.id, { is_used: 1 });
 
-            const user = db.getById('users', workerCode.worker_id);
+            const user = await db.getById('users', workerCode.worker_id);
             const token = jwt.sign(
                 { id: user.id, email: user.email, name: user.name, role: user.role },
                 JWT_SECRET,
@@ -216,7 +265,7 @@ app.post('/api/login', async (req, res) => {
         }
 
         // Regular login with password
-        const user = db.findBy('users', u => u.email === email.toLowerCase());
+        const user = await db.findBy('users', u => u.email === email.toLowerCase());
         if (!user) {
             return res.status(400).json({ error: 'Invalid credentials' });
         }
@@ -226,7 +275,7 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Invalid credentials' });
         }
 
-        if (!user.is_verified && user.role === 'buyer') {
+        if (Number(user.is_verified) === 0 && user.role === 'buyer') {
             return res.status(403).json({ error: 'Please verify your email first' });
         }
 
@@ -253,18 +302,24 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Get current user
-app.get('/api/me', authRequired, (req, res) => {
-    const user = db.getById('users', req.user.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, is_verified: user.is_verified, profile_pic: user.profile_pic, created_at: user.created_at } });
+app.get('/api/me', authRequired, async (req, res) => {
+    try {
+        const user = await db.getById('users', req.user.id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, is_verified: user.is_verified, profile_pic: user.profile_pic, created_at: user.created_at } });
+    } catch (err) {
+        console.error('Get me error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
 });
 
 // ===== PRODUCT ROUTES =====
 
 // Get all products
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
     try {
-        const products = db.getAll('products').sort((a, b) => b.id - a.id);
+        const products = await db.getAll('products');
+        products.sort((a, b) => Number(b.id) - Number(a.id));
         res.json({ products });
     } catch (err) {
         console.error('Get products error:', err);
@@ -273,9 +328,9 @@ app.get('/api/products', (req, res) => {
 });
 
 // Get single product
-app.get('/api/products/:id', (req, res) => {
+app.get('/api/products/:id', async (req, res) => {
     try {
-        const product = db.getById('products', parseInt(req.params.id));
+        const product = await db.getById('products', req.params.id);
         if (!product) return res.status(404).json({ error: 'Product not found' });
         res.json({ product });
     } catch (err) {
@@ -284,15 +339,15 @@ app.get('/api/products/:id', (req, res) => {
     }
 });
 
-// Add product (admin only)
-app.post('/api/products', authRequired, adminRequired, (req, res) => {
+// Add product (admin & worker)
+app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
         const { name, category, price, rating, description, image, gallery, featured, stock } = req.body;
         if (!name || !price || !category) {
             return res.status(400).json({ error: 'Name, category and price are required' });
         }
 
-        const product = db.insert('products', {
+        const product = await db.insert('products', {
             name,
             category,
             price: parseFloat(price),
@@ -312,14 +367,14 @@ app.post('/api/products', authRequired, adminRequired, (req, res) => {
     }
 });
 
-// Update product (admin only)
-app.put('/api/products/:id', authRequired, adminRequired, (req, res) => {
+// Update product (admin & worker)
+app.put('/api/products/:id', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
         const { name, category, price, rating, description, image, gallery, featured, stock } = req.body;
-        const existing = db.getById('products', parseInt(req.params.id));
+        const existing = await db.getById('products', req.params.id);
         if (!existing) return res.status(404).json({ error: 'Product not found' });
 
-        const product = db.update('products', existing.id, {
+        const product = await db.update('products', existing.id, {
             name: name || existing.name,
             category: category || existing.category,
             price: price || existing.price,
@@ -338,10 +393,10 @@ app.put('/api/products/:id', authRequired, adminRequired, (req, res) => {
     }
 });
 
-// Delete product (admin only)
-app.delete('/api/products/:id', authRequired, adminRequired, (req, res) => {
+// Delete product (admin & worker)
+app.delete('/api/products/:id', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
-        const result = db.remove('products', parseInt(req.params.id));
+        const result = await db.remove('products', req.params.id);
         if (!result) return res.status(404).json({ error: 'Product not found' });
         res.json({ message: 'Product deleted successfully' });
     } catch (err) {
@@ -363,7 +418,7 @@ app.post('/api/orders', authRequired, async (req, res) => {
 
         const orderRef = generateOrderRef();
 
-        const order = db.insert('orders', {
+        const order = await db.insert('orders', {
             order_ref: orderRef,
             user_id: req.user.id,
             customer_name,
@@ -389,17 +444,10 @@ app.post('/api/orders', authRequired, async (req, res) => {
             items
         };
 
-        // Send emails
-        try {
-            // Send order confirmation to customer
-            await emailService.sendOrderConfirmationEmail(orderData);
-
-            // Send notification to owner based on payment method
-            if (payment_method === 'cash') {
-                await emailService.sendCashOnDeliveryEmail(orderData);
-            }
-        } catch (emailErr) {
-            console.error('Order email error:', emailErr);
+        // Send emails in the background (don't block the response)
+        sendEmailInBackground(emailService.sendOrderConfirmationEmail(orderData));
+        if (payment_method === 'cash') {
+            sendEmailInBackground(emailService.sendCashOnDeliveryEmail(orderData));
         }
 
         res.status(201).json({
@@ -414,9 +462,10 @@ app.post('/api/orders', authRequired, async (req, res) => {
 });
 
 // Get user's orders
-app.get('/api/orders', authRequired, (req, res) => {
+app.get('/api/orders', authRequired, async (req, res) => {
     try {
-        const orders = db.findAll('orders', o => o.user_id === req.user.id).sort((a, b) => b.id - a.id);
+        const orders = await db.findAll('orders', o => String(o.user_id) === String(req.user.id));
+        orders.sort((a, b) => Number(b.id) - Number(a.id));
         res.json({ orders });
     } catch (err) {
         console.error('Get orders error:', err);
@@ -425,9 +474,10 @@ app.get('/api/orders', authRequired, (req, res) => {
 });
 
 // Get all orders (admin/worker)
-app.get('/api/admin/orders', authRequired, workerOrAdminRequired, (req, res) => {
+app.get('/api/admin/orders', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
-        const orders = db.getAll('orders').sort((a, b) => b.id - a.id);
+        const orders = await db.getAll('orders');
+        orders.sort((a, b) => Number(b.id) - Number(a.id));
         res.json({ orders });
     } catch (err) {
         console.error('Get all orders error:', err);
@@ -436,13 +486,13 @@ app.get('/api/admin/orders', authRequired, workerOrAdminRequired, (req, res) => 
 });
 
 // Update order status (admin/worker)
-app.put('/api/admin/orders/:id', authRequired, workerOrAdminRequired, (req, res) => {
+app.put('/api/admin/orders/:id', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
         const { status, payment_status } = req.body;
-        const existing = db.getById('orders', parseInt(req.params.id));
+        const existing = await db.getById('orders', req.params.id);
         if (!existing) return res.status(404).json({ error: 'Order not found' });
 
-        db.update('orders', existing.id, {
+        await db.update('orders', existing.id, {
             status: status || existing.status,
             payment_status: payment_status || existing.payment_status
         });
@@ -464,7 +514,7 @@ app.post('/api/payments/verify', authRequired, async (req, res) => {
             return res.status(400).json({ error: 'All payment details are required' });
         }
 
-        const payment = db.insert('payment_verifications', {
+        const payment = await db.insert('payment_verifications', {
             order_ref,
             payer_name,
             payer_phone,
@@ -475,20 +525,16 @@ app.post('/api/payments/verify', authRequired, async (req, res) => {
             created_at: new Date().toISOString()
         });
 
-        // Send verification email to owner with buttons
-        try {
-            await emailService.sendPaymentVerificationEmail({
-                paymentId: payment.id,
-                orderRef: order_ref,
-                payer_name,
-                payer_phone,
-                payer_email,
-                amount,
-                transaction_ref
-            });
-        } catch (emailErr) {
-            console.error('Payment verification email error:', emailErr);
-        }
+        // Send verification email to owner in the background (don't block the response)
+        sendEmailInBackground(emailService.sendPaymentVerificationEmail({
+            paymentId: payment.id,
+            orderRef: order_ref,
+            payer_name,
+            payer_phone,
+            payer_email,
+            amount,
+            transaction_ref
+        }));
 
         res.status(201).json({
             message: 'Payment verification submitted. The owner will verify your payment.',
@@ -501,17 +547,17 @@ app.post('/api/payments/verify', authRequired, async (req, res) => {
 });
 
 // Verify payment (from email button)
-app.get('/api/payments/verify/:id', (req, res) => {
+app.get('/api/payments/verify/:id', async (req, res) => {
     try {
-        const payment = db.getById('payment_verifications', parseInt(req.params.id));
+        const payment = await db.getById('payment_verifications', req.params.id);
         if (!payment) return res.status(404).send('Payment verification not found');
 
-        db.update('payment_verifications', payment.id, { status: 'verified' });
+        await db.update('payment_verifications', payment.id, { status: 'verified' });
 
         // Update order payment status
-        const order = db.findBy('orders', o => o.order_ref === payment.order_ref);
+        const order = await db.findBy('orders', o => o.order_ref === payment.order_ref);
         if (order) {
-            db.update('orders', order.id, { payment_status: 'verified' });
+            await db.update('orders', order.id, { payment_status: 'verified' });
         }
 
         res.send(`
@@ -535,12 +581,12 @@ app.get('/api/payments/verify/:id', (req, res) => {
 });
 
 // Reject payment (from email button)
-app.get('/api/payments/reject/:id', (req, res) => {
+app.get('/api/payments/reject/:id', async (req, res) => {
     try {
-        const payment = db.getById('payment_verifications', parseInt(req.params.id));
+        const payment = await db.getById('payment_verifications', req.params.id);
         if (!payment) return res.status(404).send('Payment verification not found');
 
-        db.update('payment_verifications', payment.id, { status: 'rejected' });
+        await db.update('payment_verifications', payment.id, { status: 'rejected' });
 
         res.send(`
             <!DOCTYPE html>
@@ -573,7 +619,7 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
         }
 
         // Check if user exists
-        const existing = db.findBy('users', u => u.email === email.toLowerCase());
+        const existing = await db.findBy('users', u => u.email === email.toLowerCase());
         if (existing) {
             return res.status(400).json({ error: 'A user with this email already exists' });
         }
@@ -585,7 +631,7 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
 
         // Create worker user
         const hashedPassword = await bcrypt.hash(tempPassword, 10);
-        const worker = db.insert('users', {
+        const worker = await db.insert('users', {
             name,
             email: email.toLowerCase(),
             password: hashedPassword,
@@ -596,19 +642,15 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
         });
 
         // Store login code
-        db.insert('worker_codes', {
+        await db.insert('worker_codes', {
             worker_id: worker.id,
             login_code: loginCode,
             is_used: 0,
             created_at: new Date().toISOString()
         });
 
-        // Send credentials email
-        try {
-            await emailService.sendWorkerCredentialsEmail(email, name, username, loginCode);
-        } catch (emailErr) {
-            console.error('Worker email error:', emailErr);
-        }
+        // Send credentials email in the background (don't block the response)
+        sendEmailInBackground(emailService.sendWorkerCredentialsEmail(email, name, username, loginCode));
 
         res.status(201).json({
             message: 'Worker added successfully. Login credentials sent to their email.',
@@ -627,9 +669,10 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
 });
 
 // Get all workers
-app.get('/api/admin/workers', authRequired, adminRequired, (req, res) => {
+app.get('/api/admin/workers', authRequired, adminRequired, async (req, res) => {
     try {
-        const workers = db.findAll('users', u => u.role === 'worker').sort((a, b) => b.id - a.id);
+        const workers = await db.findAll('users', u => u.role === 'worker');
+        workers.sort((a, b) => Number(b.id) - Number(a.id));
         res.json({ workers: workers.map(w => ({ id: w.id, name: w.name, email: w.email, role: w.role, is_verified: w.is_verified, created_at: w.created_at })) });
     } catch (err) {
         console.error('Get workers error:', err);
@@ -638,13 +681,13 @@ app.get('/api/admin/workers', authRequired, adminRequired, (req, res) => {
 });
 
 // Delete worker
-app.delete('/api/admin/workers/:id', authRequired, adminRequired, (req, res) => {
+app.delete('/api/admin/workers/:id', authRequired, adminRequired, async (req, res) => {
     try {
-        const worker = db.getById('users', parseInt(req.params.id));
+        const worker = await db.getById('users', req.params.id);
         if (!worker || worker.role !== 'worker') return res.status(404).json({ error: 'Worker not found' });
 
-        db.remove('users', worker.id);
-        db.removeWhere('worker_codes', wc => wc.worker_id === worker.id);
+        await db.remove('users', worker.id);
+        await db.removeWhere('worker_codes', wc => String(wc.worker_id) === String(worker.id));
         res.json({ message: 'Worker removed successfully' });
     } catch (err) {
         console.error('Delete worker error:', err);
@@ -655,16 +698,16 @@ app.delete('/api/admin/workers/:id', authRequired, adminRequired, (req, res) => 
 // ===== ADMIN REPORTS ROUTES =====
 
 // Get admin dashboard stats
-app.get('/api/admin/stats', authRequired, adminRequired, (req, res) => {
+app.get('/api/admin/stats', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
-        const products = db.getAll('products');
-        const orders = db.getAll('orders');
-        const users = db.getAll('users');
-        const payments = db.getAll('payment_verifications');
+        const products = await db.getAll('products');
+        const orders = await db.getAll('orders');
+        const users = await db.getAll('users');
+        const payments = await db.getAll('payment_verifications');
 
         const totalProducts = products.length;
         const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+        const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
         const totalUsers = users.filter(u => u.role === 'buyer').length;
         const totalWorkers = users.filter(u => u.role === 'worker').length;
         const pendingPayments = payments.filter(p => p.status === 'pending').length;
@@ -677,7 +720,7 @@ app.get('/api/admin/stats', authRequired, adminRequired, (req, res) => {
                 try {
                     const items = JSON.parse(o.items || '[]');
                     items.forEach(item => {
-                        if (item.id === p.id) {
+                        if (String(item.id) === String(p.id)) {
                             totalOrdered += item.quantity || 0;
                             totalRevenueForProduct += (item.price || 0) * (item.quantity || 0);
                         }
@@ -695,7 +738,7 @@ app.get('/api/admin/stats', authRequired, adminRequired, (req, res) => {
         }).sort((a, b) => b.total_ordered - a.total_ordered);
 
         // Recent orders
-        const recentOrders = orders.sort((a, b) => b.id - a.id).slice(0, 10);
+        const recentOrders = orders.sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 10);
 
         res.json({
             stats: {
@@ -716,9 +759,10 @@ app.get('/api/admin/stats', authRequired, adminRequired, (req, res) => {
 });
 
 // Export orders as CSV
-app.get('/api/admin/export/orders', authRequired, adminRequired, (req, res) => {
+app.get('/api/admin/export/orders', authRequired, adminRequired, async (req, res) => {
     try {
-        const orders = db.getAll('orders').sort((a, b) => b.id - a.id);
+        const orders = await db.getAll('orders');
+        orders.sort((a, b) => Number(b.id) - Number(a.id));
 
         const csvRows = [
             ['Order Ref', 'Customer Name', 'Email', 'Phone', 'Address', 'Payment Method', 'Payment Status', 'Order Status', 'Total', 'Date', 'Items']
@@ -754,10 +798,10 @@ app.get('/api/admin/export/orders', authRequired, adminRequired, (req, res) => {
 });
 
 // Export product report as CSV
-app.get('/api/admin/export/products', authRequired, adminRequired, (req, res) => {
+app.get('/api/admin/export/products', authRequired, adminRequired, async (req, res) => {
     try {
-        const products = db.getAll('products');
-        const orders = db.getAll('orders');
+        const products = await db.getAll('products');
+        const orders = await db.getAll('orders');
 
         const csvRows = [
             ['Product ID', 'Name', 'Category', 'Price', 'Stock', 'Featured', 'Total Ordered']
@@ -769,7 +813,7 @@ app.get('/api/admin/export/products', authRequired, adminRequired, (req, res) =>
                 try {
                     const items = JSON.parse(o.items || '[]');
                     items.forEach(item => {
-                        if (item.id === p.id) {
+                        if (String(item.id) === String(p.id)) {
                             totalOrdered += item.quantity || 0;
                         }
                     });
@@ -800,14 +844,14 @@ app.get('/api/admin/export/products', authRequired, adminRequired, (req, res) =>
 // ===== CART ROUTES =====
 
 // Save cart (server-side)
-app.post('/api/cart', authRequired, (req, res) => {
+app.post('/api/cart', authRequired, async (req, res) => {
     try {
         const { items } = req.body;
-        const existing = db.findBy('carts', c => c.user_id === req.user.id);
+        const existing = await db.findBy('carts', c => String(c.user_id) === String(req.user.id));
         if (existing) {
-            db.update('carts', existing.id, { items: JSON.stringify(items || []), updated_at: new Date().toISOString() });
+            await db.update('carts', existing.id, { items: JSON.stringify(items || []), updated_at: new Date().toISOString() });
         } else {
-            db.insert('carts', {
+            await db.insert('carts', {
                 user_id: req.user.id,
                 items: JSON.stringify(items || []),
                 updated_at: new Date().toISOString()
@@ -821,9 +865,9 @@ app.post('/api/cart', authRequired, (req, res) => {
 });
 
 // Get cart
-app.get('/api/cart', authRequired, (req, res) => {
+app.get('/api/cart', authRequired, async (req, res) => {
     try {
-        const cart = db.findBy('carts', c => c.user_id === req.user.id);
+        const cart = await db.findBy('carts', c => String(c.user_id) === String(req.user.id));
         res.json({ items: cart ? JSON.parse(cart.items) : [] });
     } catch (err) {
         console.error('Get cart error:', err);
@@ -837,8 +881,13 @@ app.get('/api/health', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`🚀 TriumphsMart server running on http://localhost:${PORT}`);
-    console.log(`📊 API available at http://localhost:${PORT}/api`);
-    console.log(`🛍️  Frontend available at http://localhost:${PORT}`);
+db.init().then(() => {
+    app.listen(PORT, () => {
+        console.log(`🚀 TriumphsMart server running on http://localhost:${PORT}`);
+        console.log(`📊 API available at http://localhost:${PORT}/api`);
+        console.log(`️ Frontend available at http://localhost:${PORT}`);
+    });
+}).catch(err => {
+    console.error('❌ Failed to initialize database:', err.message);
+    process.exit(1);
 });

@@ -64,7 +64,9 @@
         <div class="big">📧</div>
         <h2 style="color:#fff;font-size:1.8rem;font-weight:800;">Check your inbox</h2>
         <p>We've sent a 6-digit verification code to your email. Enter it below to complete registration.</p>
-        <p style="color:rgba(255,255,255,0.85);">Didn't receive it? Check your spam folder or <a href="register.html" style="color:#fff;font-weight:700;text-decoration:underline;">register again</a>.</p>
+        <p style="color:rgba(255,255,255,0.9);">
+            Can't find the email? Check your Spam / Junk / Promotions folder — the verification code may have landed there.
+    </p>
     </div>
     <div class="auth-card">
         <h2>Verification Code</h2>
@@ -77,8 +79,11 @@
             <button type="submit">Verify Account</button>
         </form>
         <div class="resend-link">
-            <a href="register.html">Resend code / Try again</a>
+            <a href="#" onclick="resendVerification(); return false;">Resend verification code</a>
         </div>
+        <p style="text-align:center;font-size:12px;color:#999;margin-top:8px;">
+            Can't find the email? Check your <strong>Spam / Junk</strong> folder.
+        </p>
     </div>
 </section>
 
@@ -117,6 +122,27 @@ async function verifyCode() {
     } catch (err) {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Verify Account"; }
         showToast(err.message || "Wrong verification code. Please try again.", "error");
+    }
+}
+
+/* ===== Resend verification code ===== */
+async function resendVerification() {
+    var email = localStorage.getItem("pending_verify_email");
+    if (!email) {
+        showToast("No pending registration found. Please register again.", "error");
+        setTimeout(function () { window.location.href = "register.html"; }, 1500);
+        return;
+    }
+
+    try {
+        var result = await apiResendVerification(email);
+        if (result.emailSent === false) {
+            showToast("Email could not be sent automatically. Please check your Spam/Junk folder or try again later.", "error");
+        } else {
+            showToast("Verification code resent! Please check your Spam/Junk folder if you do not see it.", "success");
+        }
+    } catch (err) {
+        showToast(err.message || "Failed to resend code. Please try again.", "error");
     }
 }
 

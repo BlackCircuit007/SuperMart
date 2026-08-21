@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Dashboard — TriumphsMart</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .admin-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 28px 4%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .admin-card {
+            background: var(--c-card-bg);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            box-shadow: var(--c-shadow);
+            padding: 24px;
+            height: auto;
+        }
+        .admin-card2 {
+            background: var(--c-card-bg);
+            border: 1px solid var(--c-border);
+            border-radius: 16px;
+            box-shadow: var(--c-shadow);
+            padding: 24px;
+        }
+        body.dark-mode .admin-card,
+        body.dark-mode .admin-card2 {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+        }
+        .admin-card h2,
+        .admin-card2 h2 {
+            margin: 0 0 6px;
+            font-size: 20px;
+            color: var(--c-text);
+        }
+        body.dark-mode .admin-card h2,
+        body.dark-mode .admin-card2 h2 { color: var(--c-dark-text); }
+        .admin-card p.sub,
+        .admin-card2 p.sub {
+            margin: 0 0 20px;
+            color: var(--c-text-secondary);
+            font-size: 14px;
+        }
+        .admin-card label,
+        .admin-card2 label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--c-text-secondary);
+            margin: 14px 0 6px;
+        }
+        .admin-card input[type="text"],
+        .admin-card input[type="number"],
+        .admin-card input[type="password"],
+        .admin-card input[type="email"],
+        .admin-card textarea,
+        .admin-card select,
+        .admin-card2 input[type="text"],
+        .admin-card2 input[type="number"],
+        .admin-card2 input[type="password"],
+        .admin-card2 input[type="email"],
+        .admin-card2 textarea,
+        .admin-card2 select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--c-border);
+            border-radius: 10px;
+            font-size: 15px;
+            outline: none;
+            background: var(--c-card-bg);
+            color: var(--c-text);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        body.dark-mode .admin-card input,
+        body.dark-mode .admin-card textarea,
+        body.dark-mode .admin-card select,
+        body.dark-mode .admin-card2 input,
+        body.dark-mode .admin-card2 textarea,
+        body.dark-mode .admin-card2 select {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+            color: var(--c-dark-text);
+        }
+        .admin-card input:focus,
+        .admin-card textarea:focus,
+        .admin-card select:focus,
+        .admin-card2 input:focus,
+        .admin-card2 textarea:focus,
+        .admin-card2 select:focus {
+            border-color: #fdd5cc;
+            box-shadow: 0 0 0 3px rgba(252, 104, 63, 0.12);
+        }
+        .admin-card textarea,
+        .admin-card2 textarea {
+            resize: vertical;
+            min-height: 90px;
+        }
+        .admin-btn {
+            width: 100%;
+            background: var(--c-primary);
+            color: #fff;
+            border: none;
+            border-radius: 26px;
+            padding: 13px 16px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 18px;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .admin-btn:hover {
+            background: var(--c-primary-dark);
+            transform: translateY(-1px);
+        }
+        .admin-btn.secondary {
+            background: #e53935;
+        }
+        .admin-btn.secondary:hover { background: #c62828; }
+        .admin-btn.green {
+            background: #4caf50;
+        }
+        .admin-btn.green:hover { background: #388e3c; }
+        .admin-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+            font-size: 13px;
+            color: var(--c-text-secondary);
+        }
+        .admin-checkbox input { width: auto; }
+
+        /* Image upload grid */
+        .image-upload-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .image-upload-slot {
+            position: relative;
+            border: 2px dashed var(--c-border);
+            border-radius: 10px;
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: #fafafa;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        body.dark-mode .image-upload-slot {
+            background: #2a2a2a;
+            border-color: var(--c-dark-border);
+        }
+        .image-upload-slot:hover { border-color: var(--c-primary); }
+        .image-upload-slot .plus {
+            font-size: 26px;
+            color: #bbb;
+        }
+        .image-upload-slot input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+        .image-upload-slot img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .image-slot-label {
+            position: absolute;
+            bottom: 4px;
+            left: 4px;
+            right: 4px;
+            text-align: center;
+            font-size: 10px;
+            color: var(--c-text-secondary);
+            background: rgba(255,255,255,0.8);
+            border-radius: 4px;
+            padding: 2px 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        body.dark-mode .image-slot-label { background: rgba(34,37,41,0.9); }
+
+        /* Product list */
+        .admin-product-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border: 1px solid var(--c-border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+        body.dark-mode .admin-product-item {
+            background: #2a2a2a;
+            border-color: var(--c-dark-border);
+        }
+        .admin-product-item .thumb {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9eef2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .admin-product-item .thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .admin-product-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+        .admin-product-item .info h4 {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 0 0 2px;
+            color: var(--c-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        body.dark-mode .admin-product-item .info h4 { color: var(--c-dark-text); }
+        .admin-product-item .info .cat {
+            font-size: 12px;
+            color: var(--c-text-secondary);
+        }
+        .admin-product-item .price {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--c-primary);
+            white-space: nowrap;
+        }
+        .admin-product-item .delete-btn {
+            background: #fee;
+            color: #e53935;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .admin-product-item .delete-btn:hover {
+            background: #e53935;
+            color: #fff;
+        }
+
+        /* Login box */
+        .admin-login {
+            max-width: 420px;
+            margin: 80px auto;
+            text-align: center;
+        }
+        .admin-login .lock-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+        .stat-box {
+            background: linear-gradient(135deg, #fff0e6 0%, #ffe6db 100%);
+            border: 1px solid #fdd5cc;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+        }
+        body.dark-mode .stat-box {
+            background: linear-gradient(135deg, #2a1a12 0%, #3a2216 100%);
+            border-color: #4a2a1a;
+        }
+        .stat-box .num {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--c-primary);
+        }
+        .stat-box .label {
+            font-size: 13px;
+            color: var(--c-text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Tabs */
+        .admin-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .admin-tab {
+            padding: 10px 20px;
+            border: 1px solid var(--c-border);
+            border-radius: 26px;
+            background: var(--c-card-bg);
+            color: var(--c-text);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        body.dark-mode .admin-tab {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+            color: var(--c-dark-text);
+        }
+        .admin-tab:hover {
+            border-color: var(--c-primary);
+            color: var(--c-primary);
+        }
+        .admin-tab.active {
+            background: var(--c-primary);
+            color: #fff;
+            border-color: var(--c-primary);
+        }
+
+        /* Report table */
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .report-table th {
+            background: #f5f5f5;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 700;
+            color: var(--c-text);
+            border-bottom: 2px solid var(--c-border);
+        }
+        body.dark-mode .report-table th {
+            background: #2a2a2a;
+            color: var(--c-dark-text);
+            border-bottom-color: var(--c-dark-border);
+        }
+        .report-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--c-border);
+            color: var(--c-text);
+        }
+        body.dark-mode .report-table td {
+            color: var(--c-dark-text);
+            border-bottom-color: var(--c-dark-border);
+        }
+        .report-table tr:hover td {
+            background: rgba(252, 104, 63, 0.05);
+        }
+
+        /* Export buttons */
+        .export-btns {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .export-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border: 1px solid var(--c-border);
+            border-radius: 8px;
+            background: var(--c-card-bg);
+            color: var(--c-text);
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        body.dark-mode .export-btn {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+            color: var(--c-dark-text);
+        }
+        .export-btn:hover {
+            border-color: var(--c-primary);
+            color: var(--c-primary);
+        }
+
+        /* Theme toggle */
+        .theme-toggle-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 4px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .theme-toggle-btn:hover { background: rgba(252, 104, 63, 0.08); }
+
+        @media (max-width: 900px) {
+            .admin-layout { grid-template-columns: 1fr; }
+            .image-upload-grid { grid-template-columns: repeat(3, 1fr); }
+            .admin-card { padding: 20px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .image-upload-grid { grid-template-columns: repeat(2, 1fr); }
+            .admin-layout { padding: 16px 3%; }
+            .admin-card { padding: 16px; }
+            .admin-product-item { flex-wrap: wrap; }
+            .admin-product-item .info { flex-basis: calc(100% - 150px); }
+            .admin-product-item .delete-btn { margin-left: auto; }
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 480px) {
+            .admin-card { padding: 14px; }
+            .admin-card h2 { font-size: 18px; }
+            .admin-login { margin: 40px auto; padding: 0 3%; }
+            .admin-login h2 { font-size: 22px; }
+            .image-upload-grid { gap: 6px; }
+            .admin-product-item .thumb {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+            .admin-product-item .info { flex-basis: calc(100% - 130px); }
+            .admin-product-item .price { font-size: 12px; }
+        }
+        @media (max-width: 375px) {
+            .admin-layout { padding: 12px 3%; }
+            .admin-card { padding: 12px; }
+            .image-upload-grid { grid-template-columns: repeat(2, 1fr); }
+            .admin-product-item .info { flex-basis: 100%; }
+            .admin-product-item { flex-direction: column; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Top utility bar -->
+<div class="topbar">
+    <div class="topbar-left">
+        <a href="index.html">🏠 Home</a>
+        <a href="products.html">Shop</a>
+        <a href="cart.html">Cart</a>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+        <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
+        <a href="#" class="flag">👷 Worker</a>
+    </div>
+</div>
+
+<header class="navbar">
+    <div class="nav-row">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <a href="index.html" class="brand"><span class="brand-mark">🛍️</span><span>TriumphsMart</span></a>
+            <div class="nav-links" id="navLinks">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="products.html" class="nav-link">Shop</a>
+                <a href="worker.html" class="nav-link nav-link--active">Worker Portal</a>
+            </div>
+        </div>
+        <div class="nav-actions">
+            <a href="#" class="nav-action" id="workerLogoutBtn" style="display:none;">
+                <span class="action-icon">🚪</span>
+                <span>Logout</span>
+            </a>
+            <a href="login.html" class="nav-action" id="authAction">
+                <span class="action-icon">👤</span>
+                <span>Account</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<!-- Worker Login Screen (shown when not logged in as worker) -->
+<div id="workerLoginScreen">
+    <div class="admin-login">
+        <div class="lock-icon">🔒</div>
+        <h2 style="font-size:26px;font-weight:800;color:var(--c-text);margin-bottom:8px;">Worker Access</h2>
+        <p style="color:var(--c-text-secondary);margin-bottom:24px;">Enter your login code to access the worker portal.</p>
+        <div class="admin-card" style="text-align:left;max-width:380px;margin:0 auto;">
+            <label>Worker Login Code</label>
+            <input type="text" id="worker-login-code" placeholder="e.g. WK8F3K2A123" autocomplete="off">
+            <button class="admin-btn green" onclick="workerCodeLogin()">Login as Worker</button>
+            <p style="text-align:center;font-size:12px;color:#999;margin-top:14px;">You received this code via email from the admin.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Worker Panel (shown when logged in as worker) -->
+<div id="workerPanel" style="display:none;">
+    <main class="page-shell" style="padding-top:20px;">
+        <section class="section-head page-head">
+            <div>
+                <p class="eyebrow">Worker Portal</p>
+                <h1>Worker Dashboard</h1>
+            </div>
+            <p style="color:var(--c-text-secondary);" id="workerInfo"></p>
+        </section>
+
+        <!-- Stats Overview (worker-relevant only) -->
+        <div class="stats-grid" id="workerStatsGrid">
+            <div class="stat-box">
+                <div class="num" id="statProducts">0</div>
+                <div class="label">Products</div>
+            </div>
+            <div class="stat-box">
+                <div class="num" id="statOrders">0</div>
+                <div class="label">Orders</div>
+            </div>
+            <div class="stat-box">
+                <div class="num" id="statRevenue">₦0</div>
+                <div class="label">Revenue</div>
+            </div>
+        </div>
+
+        <!-- Worker Tabs: Products & Orders only (NO Reports, NO Workers) -->
+        <div class="admin-tabs">
+            <button class="admin-tab active" data-tab="products" onclick="switchWorkerTab('products')">📦 Products</button>
+            <button class="admin-tab" data-tab="orders" onclick="switchWorkerTab('orders')">📋 Orders</button>
+        </div>
+
+        <!-- Products Tab -->
+        <div id="tab-products" class="admin-tab-content">
+            <div class="admin-layout" style="padding:0;">
+                <!-- Add Product Form -->
+                <div class="admin-card">
+                    <h2>➕ Add New Product</h2>
+                    <p class="sub">Fill in the details below to add a new product to the store. <strong>Tip:</strong> Image 1 is the main product photo shown on the card; images 2–5 are extra gallery views shown in detail.</p>
+
+                    <label>Product Images (up to 5)</label>
+                    <p style="font-size:12px;color:var(--c-text-secondary);margin:-10px 0 8px;">The first image is used as the main product thumbnail. Add up to 4 more for the gallery.</p>
+                    <div class="image-upload-grid" id="imageUploadGrid">
+                        <div class="image-upload-slot">
+                            <span class="plus">+</span>
+                            <span class="image-slot-label">1. Main Image</span>
+                            <input type="file" class="admin-image-input" accept="image/*" onchange="previewWorkerImage(this, 0)">
+                        </div>
+                        <div class="image-upload-slot">
+                            <span class="plus">+</span>
+                            <span class="image-slot-label">2. Gallery Image</span>
+                            <input type="file" class="admin-image-input" accept="image/*" onchange="previewWorkerImage(this, 1)">
+                        </div>
+                        <div class="image-upload-slot">
+                            <span class="plus">+</span>
+                            <span class="image-slot-label">3. Gallery Image</span>
+                            <input type="file" class="admin-image-input" accept="image/*" onchange="previewWorkerImage(this, 2)">
+                        </div>
+                        <div class="image-upload-slot">
+                            <span class="plus">+</span>
+                            <span class="image-slot-label">4. Gallery Image</span>
+                            <input type="file" class="admin-image-input" accept="image/*" onchange="previewWorkerImage(this, 3)">
+                        </div>
+                        <div class="image-upload-slot">
+                            <span class="plus">+</span>
+                            <span class="image-slot-label">5. Gallery Image</span>
+                            <input type="file" class="admin-image-input" accept="image/*" onchange="previewWorkerImage(this, 4)">
+                        </div>
+                    </div>
+
+                    <label>Category</label>
+                    <select id="worker-category">
+                        <option value="Skin Care">🧴 Skin Care</option>
+                        <option value="Provisions">🍚 Provisions</option>
+                    </select>
+
+                    <label>Product Name</label>
+                    <input type="text" id="worker-name" placeholder="e.g. Vitamin C Serum" autocomplete="off">
+
+                    <label>Description</label>
+                    <textarea id="worker-desc" placeholder="Describe the product..."></textarea>
+
+                    <label>Price (₦)</label>
+                    <input type="number" id="worker-price" placeholder="e.g. 8500" min="1">
+
+                    <label>Stock Quantity</label>
+                    <input type="number" id="worker-stock" placeholder="e.g. 50" min="0" value="10">
+
+                    <label>Rating (1–5)</label>
+                    <input type="number" id="worker-rating" placeholder="e.g. 4.5" min="1" max="5" step="0.1">
+
+                    <div class="admin-checkbox">
+                        <input type="checkbox" id="worker-featured" checked>
+                        <label for="worker-featured" style="margin:0;">⭐ Feature this product</label>
+                    </div>
+
+                    <button class="admin-btn" onclick="workerAddProductForm()">Add Product</button>
+                </div>
+
+                <!-- Remove / Manage Products -->
+                <div class="admin-card2">
+                    <h2>🗑️ Manage Products</h2>
+                    <p class="sub">Click the delete button to permanently remove a product from the store.</p>
+                    <div id="worker-product-list">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Orders Tab -->
+        <div id="tab-orders" class="admin-tab-content" style="display:none;">
+            <div class="admin-card">
+                <h2>📋 All Orders</h2>
+                <p class="sub">View and manage customer orders. Workers can view but cannot delete orders.</p>
+                <div style="overflow-x:auto;">
+                    <table class="report-table" id="workerOrdersTable">
+                        <thead>
+                            <tr>
+                                <th>Order Ref</th>
+                                <th>Customer</th>
+                                <th>Total</th>
+                                <th>Payment</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workerOrdersBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<footer class="site-footer">
+    <div class="footer-bottom">
+        <p>© 2026 TriumphsMart. All rights reserved.</p>
+    </div>
+</footer>
+
+<script src="js/api.js"></script>
+<script src="js/data.js"></script>
+<script src="js/main.js"></script>
+<script>
+/* ===== Worker page specific logic ===== */
+
+var workerImagePreviews = [null, null, null, null, null];
+
+/* ===== Worker login via code ===== */
+async function workerCodeLogin() {
+    var code = document.getElementById("worker-login-code").value.trim();
+    if (!code) { showToast("Please enter your worker login code", "error"); return; }
+
+    var submitBtn = document.querySelector("#workerLoginScreen button");
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Logging in..."; }
+
+    try {
+        var data = await apiLogin('', '', code);
+        if (data.user.role !== 'worker') {
+            showToast("This code is not for a worker account", "error");
+            logout();
+            return;
+        }
+        showToast("Welcome " + data.user.name + "!", "success");
+        setTimeout(function () { location.reload(); }, 800);
+    } catch (err) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Login as Worker"; }
+        showToast(err.message || "Invalid worker login code", "error");
+    }
+}
+
+/* ===== Image preview for worker product form ===== */
+function previewWorkerImage(input, index) {
+    if (!input.files || !input.files[0]) {
+        workerImagePreviews[index] = null;
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+        workerImagePreviews[index] = e.target.result;
+        var slots = document.querySelectorAll("#workerPanel .image-upload-slot");
+        if (slots[index]) {
+            slots[index].innerHTML = '<img src="' + e.target.result + '" alt="Upload">';
+        }
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+/* ===== Render worker product list ===== */
+function renderWorkerProductList() {
+    var container = document.getElementById("worker-product-list");
+    if (!container) return;
+
+    apiGetProducts().then(function (products) {
+        container.innerHTML = "";
+        if (products.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="big">📦</div><p>No products yet. Add one above!</p></div>';
+            return;
+        }
+        products.forEach(function (p) {
+            var imgHtml = p.image && (String(p.image).indexOf("data:") === 0 || String(p.image).indexOf("http") === 0)
+                ? '<img src="' + p.image + '" alt="' + p.name + '">'
+                : '<span>' + (p.image || "🛍️") + "</span>";
+            var item = document.createElement("div");
+            item.className = "admin-product-item";
+            item.innerHTML =
+                '<div class="thumb">' + imgHtml + "</div>" +
+                '<div class="info"><h4>' + p.name + '</h4><span class="cat">' + p.category + ' • Stock: ' + (p.stock || 0) + '</span></div>' +
+                '<div class="price">' + price(p.price) + "</div>" +
+                '<button class="delete-btn" onclick="confirmWorkerDeleteProduct(' + p.id + ')">🗑 Delete</button>';
+            container.appendChild(item);
+        });
+    }).catch(function (err) {
+        container.innerHTML = '<div class="empty-state"><p>Failed to load products: ' + err.message + '</p></div>';
+    });
+}
+
+/* ===== Add product from worker form ===== */
+function workerAddProductForm() {
+    var name = document.getElementById("worker-name").value.trim();
+    var category = document.getElementById("worker-category").value;
+    var price = parseFloat(document.getElementById("worker-price").value);
+    var rating = parseFloat(document.getElementById("worker-rating").value);
+    var description = document.getElementById("worker-desc").value.trim();
+    var featured = document.getElementById("worker-featured").checked;
+    var stock = parseInt(document.getElementById("worker-stock").value) || 0;
+
+    if (!name || !price || !description) {
+        showToast("Please fill in name, price, and description", "error");
+        return;
+    }
+    if (isNaN(price) || price <= 0) { showToast("Please enter a valid price", "error"); return; }
+
+    var images = workerImagePreviews.filter(function (img) { return img !== null; });
+
+    var product = {
+        name: name,
+        category: category,
+        price: price,
+        rating: rating || 4.5,
+        description: description,
+        image: images[0] || "🛍️",
+        gallery: images,
+        featured: featured,
+        stock: stock
+    };
+
+    apiAddProduct(product).then(function () {
+        showToast('Product "' + name + '" added successfully!', "success");
+        // Reset form
+        workerImagePreviews = [null, null, null, null, null];
+        var slots = document.querySelectorAll("#workerPanel .image-upload-slot");
+        slots.forEach(function (slot, i) {
+            slot.innerHTML = '<span class="plus">+</span><span class="image-slot-label">' + (i === 0 ? "1. Main Image" : (i + 1) + ". Gallery Image") + '</span><input type="file" class="admin-image-input" accept="image/*" onchange="previewWorkerImage(this, ' + i + ')">';
+        });
+        document.getElementById("worker-name").value = "";
+        document.getElementById("worker-price").value = "";
+        document.getElementById("worker-stock").value = "10";
+        document.getElementById("worker-rating").value = "";
+        document.getElementById("worker-desc").value = "";
+        document.getElementById("worker-featured").checked = true;
+        renderWorkerProductList();
+    }).catch(function (err) {
+        showToast(err.message || "Failed to add product", "error");
+    });
+}
+
+/* ===== Delete product from worker panel ===== */
+function confirmWorkerDeleteProduct(id) {
+    if (confirm('Delete this product from the store?')) {
+        apiDeleteProduct(id).then(function () {
+            showToast('Product removed from store', "success");
+            renderWorkerProductList();
+        }).catch(function (err) {
+            showToast(err.message || "Failed to delete product", "error");
+        });
+    }
+}
+
+/* ===== Tab switching ===== */
+function switchWorkerTab(tabName) {
+    document.querySelectorAll(".admin-tab").forEach(function (tab) {
+        tab.classList.remove("active");
+    });
+    document.querySelector('.admin-tab[data-tab="' + tabName + '"]').classList.add("active");
+
+    document.querySelectorAll(".admin-tab-content").forEach(function (content) {
+        content.style.display = "none";
+    });
+    document.getElementById("tab-" + tabName).style.display = "block";
+
+    if (tabName === "orders") loadWorkerOrders();
+}
+
+/* ===== Load worker stats ===== */
+function loadWorkerStats() {
+    apiGetAdminStats().then(function (data) {
+        var s = data.stats;
+        document.getElementById("statProducts").textContent = s.totalProducts;
+        document.getElementById("statOrders").textContent = s.totalOrders;
+        document.getElementById("statRevenue").textContent = "₦" + Number(s.totalRevenue).toLocaleString();
+    }).catch(function (err) {
+        console.error("Failed to load stats:", err);
+    });
+}
+
+/* ===== Load worker orders ===== */
+function loadWorkerOrders() {
+    var tbody = document.getElementById("workerOrdersBody");
+    if (!tbody) return;
+
+    apiGetAllOrders().then(function (orders) {
+        tbody.innerHTML = "";
+        if (orders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">No orders yet.</td></tr>';
+            return;
+        }
+        orders.forEach(function (order) {
+            var tr = document.createElement("tr");
+            var paymentBadge = order.payment_method === 'cash' ? '💵 Cash' : '🏦 Transfer';
+            var statusBadge = order.status || 'pending';
+            var statusColor = order.status === 'completed' ? '#4caf50' : order.status === 'cancelled' ? '#e53935' : '#ff7a00';
+            tr.innerHTML =
+                '<td><strong>' + order.order_ref + '</strong></td>' +
+                '<td>' + order.customer_name + '<br><small style="color:#999;">' + order.customer_email + '</small></td>' +
+                '<td>₦' + Number(order.total).toLocaleString() + '</td>' +
+                '<td>' + paymentBadge + ' <small>(' + (order.payment_status || 'pending') + ')</small></td>' +
+                '<td><span style="color:' + statusColor + ';font-weight:600;">' + statusBadge + '</span></td>' +
+                '<td>' + new Date(order.created_at).toLocaleDateString() + '</td>' +
+                '<td><button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" onclick="openWorkerOrderUpdate(' + order.id + ')">Update</button></td>';
+            tbody.appendChild(tr);
+        });
+    }).catch(function (err) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">Failed to load orders: ' + err.message + '</td></tr>';
+    });
+}
+
+/* ===== Open order update for worker ===== */
+function openWorkerOrderUpdate(orderId) {
+    var newStatus = prompt("Enter new order status (pending, processing, shipped, completed, cancelled):\nLeave blank to cancel", "");
+    if (!newStatus) return;
+    newStatus = newStatus.trim().toLowerCase();
+    var validStatuses = ['pending', 'processing', 'shipped', 'completed', 'cancelled'];
+    if (validStatuses.indexOf(newStatus) === -1) {
+        showToast("Invalid status. Use: pending, processing, shipped, completed, cancelled", "error");
+        return;
+    }
+    apiUpdateOrderStatus(orderId, newStatus, null).then(function () {
+        showToast("Order status updated", "success");
+        loadWorkerOrders();
+    }).catch(function (err) {
+        showToast(err.message || "Failed to update order", "error");
+    });
+}
+
+/* ===== Init ===== */
+window.addEventListener("DOMContentLoaded", function () {
+    initTheme();
+    initBackToTop();
+    updateAuthUI();
+
+    var loggedIn = isLoggedIn();
+    var currentUser = getCurrentUser();
+    var isWorker = loggedIn && currentUser && currentUser.role === 'worker';
+
+    var loginScreen = document.getElementById("workerLoginScreen");
+    var panel = document.getElementById("workerPanel");
+    var logoutBtn = document.getElementById("workerLogoutBtn");
+
+    if (isWorker) {
+        loginScreen.style.display = "none";
+        panel.style.display = "block";
+        if (logoutBtn) logoutBtn.style.display = "inline-flex";
+        logoutBtn.onclick = function (e) {
+            e.preventDefault();
+            logout();
+        };
+        document.getElementById("workerInfo").textContent = "Logged in as " + currentUser.name;
+        renderWorkerProductList();
+        loadWorkerStats();
+    } else {
+        // Redirect non-workers to appropriate page
+        if (loggedIn && currentUser && currentUser.role === 'admin') {
+            window.location.href = "admin.html";
+        } else if (loggedIn && currentUser && currentUser.role === 'buyer') {
+            window.location.href = "dashboard.html";
+        }
+        loginScreen.style.display = "block";
+        panel.style.display = "none";
+    }
+});
+</script>
+</body>
+</html>

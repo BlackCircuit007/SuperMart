@@ -65,6 +65,10 @@
         <h2 style="color:#fff;font-size:1.8rem;font-weight:800;">Join thousands of happy shoppers</h2>
         <p>Create an account to enjoy fast checkout, free delivery on orders above ₦50,000, and exclusive member deals.</p>
         <p>Already have an account? <a href="login.html" style="color:#fff;font-weight:700;text-decoration:underline;">Login</a></p>
+        <p style="color:rgba(255,255,255,0.8);font-size:13px;margin-top:10px;">
+            <strong>Check your Spam/Junk folder</strong> — verification emails
+            sometimes land there. Check there before re-registering.
+        </p>
     </div>
     <div class="auth-card">
         <h2>Create Account</h2>
@@ -121,7 +125,7 @@ async function registerUser() {
         // Store email for the verify page
         localStorage.setItem("pending_verify_email", email);
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Create Account"; }
-        showToast("Verification code sent to your email!", "success");
+        showToast("Verification code sent! Please also check your Spam/Junk folder if you do not see it.", "success");
         setTimeout(function () { window.location.href = "verify.html"; }, 1500);
     } catch (err) {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Create Account"; }

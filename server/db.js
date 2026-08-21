@@ -1,119 +1,200 @@
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+require('dotenv').config();
 
-// Ensure data directory exists
-const dataDir = path.join(__dirname, '..', 'data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
+// ===== CockroachDB (PostgreSQL-compatible) connection =====
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('cockroachlabs.cloud')
+        ? { rejectUnauthorized: false }
+        : false
+});
 
-const DB_FILE = path.join(dataDir, 'triumphmart.json');
-
-// ===== Simple JSON file database =====
-let db = {
-    users: [],
-    products: [],
-    orders: [],
-    verification_codes: [],
-    worker_codes: [],
-    payment_verifications: [],
-    carts: [],
-    _nextId: {
-        users: 1,
-        products: 1,
-        orders: 1,
-        verification_codes: 1,
-        worker_codes: 1,
-        payment_verifications: 1,
-        carts: 1
-    }
-};
-
-// Load existing database
-function loadDB() {
+// ===== Table creation =====
+async function createTables() {
+    const client = await pool.connect();
     try {
-        if (fs.existsSync(DB_FILE)) {
-            const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-            db = { ...db, ...data };
-        }
+        await client.query('BEGIN');
+
+        // Users table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'buyer',
+                is_verified INTEGER NOT NULL DEFAULT 0,
+                profile_pic TEXT,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Products table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS products (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                price NUMERIC NOT NULL,
+                rating NUMERIC DEFAULT 4.5,
+                description TEXT DEFAULT '',
+                image TEXT DEFAULT '🛍️',
+                gallery TEXT,
+                featured INTEGER DEFAULT 0,
+                stock INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Orders table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS orders (
+                id SERIAL PRIMARY KEY,
+                order_ref TEXT NOT NULL UNIQUE,
+                user_id INTEGER NOT NULL,
+                customer_name TEXT NOT NULL,
+                customer_email TEXT NOT NULL,
+                customer_phone TEXT NOT NULL,
+                shipping_address TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                payment_status TEXT NOT NULL DEFAULT 'pending',
+                total NUMERIC NOT NULL,
+                items TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Verification codes table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS verification_codes (
+                id SERIAL PRIMARY KEY,
+                email TEXT NOT NULL,
+                code TEXT NOT NULL,
+                purpose TEXT NOT NULL DEFAULT 'register',
+                expires_at TEXT NOT NULL,
+                used INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Worker codes table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS worker_codes (
+                id SERIAL PRIMARY KEY,
+                worker_id INTEGER NOT NULL,
+                login_code TEXT NOT NULL,
+                is_used INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Payment verifications table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS payment_verifications (
+                id SERIAL PRIMARY KEY,
+                order_ref TEXT NOT NULL,
+                payer_name TEXT,
+                payer_phone TEXT NOT NULL,
+                payer_email TEXT,
+                amount NUMERIC NOT NULL,
+                transaction_ref TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Carts table
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS carts (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                items TEXT NOT NULL DEFAULT '[]',
+                updated_at TEXT NOT NULL
+            )
+        `);
+
+        await client.query('COMMIT');
+        console.log('✅ Database tables ready');
     } catch (err) {
-        console.error('Failed to load database:', err);
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
     }
 }
 
-// Save database
-function saveDB() {
-    try {
-        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-    } catch (err) {
-        console.error('Failed to save database:', err);
+// ===== Collection helpers (async) =====
+async function getAll(collection) {
+    const table = collection;
+    const result = await pool.query(`SELECT * FROM ${table} ORDER BY id`);
+    return result.rows;
+}
+
+async function getById(collection, id) {
+    const table = collection;
+    const result = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id]);
+    return result.rows[0] || null;
+}
+
+async function findBy(collection, predicate) {
+    const rows = await getAll(collection);
+    return rows.find(predicate) || null;
+}
+
+async function findAll(collection, predicate) {
+    const rows = await getAll(collection);
+    return rows.filter(predicate);
+}
+
+async function insert(collection, data) {
+    const table = collection;
+    const keys = Object.keys(data);
+    const values = keys.map(k => data[k]);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const result = await pool.query(
+        `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+        values
+    );
+    return result.rows[0];
+}
+
+async function update(collection, id, data) {
+    const table = collection;
+    const keys = Object.keys(data);
+    const values = keys.map(k => data[k]);
+    const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+    const result = await pool.query(
+        `UPDATE ${table} SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`,
+        [...values, id]
+    );
+    return result.rows[0] || null;
+}
+
+async function remove(collection, id) {
+    const table = collection;
+    const result = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    return result.rowCount > 0;
+}
+
+async function removeWhere(collection, predicate) {
+    const rows = await getAll(collection);
+    const toRemove = rows.filter(predicate);
+    for (const row of toRemove) {
+        await remove(collection, row.id);
     }
-}
-
-// Get next ID for a collection
-function nextId(collection) {
-    const id = db._nextId[collection] || 1;
-    db._nextId[collection] = id + 1;
-    return id;
-}
-
-// ===== Collection helpers =====
-function getAll(collection) {
-    return db[collection] || [];
-}
-
-function getById(collection, id) {
-    return (db[collection] || []).find(item => item.id === id);
-}
-
-function findBy(collection, predicate) {
-    return (db[collection] || []).find(predicate);
-}
-
-function findAll(collection, predicate) {
-    return (db[collection] || []).filter(predicate);
-}
-
-function insert(collection, data) {
-    const item = { id: nextId(collection), ...data };
-    if (!db[collection]) db[collection] = [];
-    db[collection].push(item);
-    saveDB();
-    return item;
-}
-
-function update(collection, id, data) {
-    const index = (db[collection] || []).findIndex(item => item.id === id);
-    if (index === -1) return null;
-    db[collection][index] = { ...db[collection][index], ...data };
-    saveDB();
-    return db[collection][index];
-}
-
-function remove(collection, id) {
-    const index = (db[collection] || []).findIndex(item => item.id === id);
-    if (index === -1) return false;
-    db[collection].splice(index, 1);
-    saveDB();
-    return true;
-}
-
-function removeWhere(collection, predicate) {
-    const before = (db[collection] || []).length;
-    db[collection] = (db[collection] || []).filter(item => !predicate(item));
-    saveDB();
-    return before - db[collection].length;
+    return toRemove.length;
 }
 
 // ===== Seed data =====
-function seedData() {
+async function seedData() {
     // Seed admin user
     const adminEmail = 'admin@triumphsmart.com';
-    const adminExists = (db.users || []).find(u => u.email === adminEmail);
+    const adminExists = await findBy('users', u => u.email === adminEmail);
     if (!adminExists) {
         const hashedPassword = bcrypt.hashSync('admin123', 10);
-        insert('users', {
+        await insert('users', {
             name: 'Admin',
             email: adminEmail,
             password: hashedPassword,
@@ -126,7 +207,8 @@ function seedData() {
     }
 
     // Seed products if empty
-    if ((db.products || []).length === 0) {
+    const productCount = await pool.query('SELECT COUNT(*) FROM products');
+    if (parseInt(productCount.rows[0].count) === 0) {
         const seedProducts = [
             // Skin Care
             { name: "Vitamin C Brightening Serum", category: "Skin Care", price: 8500, rating: 4.8, description: "Powerful 20% Vitamin C serum that brightens skin, fades dark spots and evens tone for a radiant glow.", image: "🧴", featured: 1, stock: 50 },
@@ -156,22 +238,30 @@ function seedData() {
             { name: "Malted Chocolate Drink 450g", category: "Provisions", price: 6900, rating: 4.6, description: "Rich malted chocolate drink for energy-packed breakfasts and snacks.", image: "🍫", featured: 1, stock: 50 }
         ];
 
-        seedProducts.forEach(p => {
-            insert('products', {
+        for (const p of seedProducts) {
+            await insert('products', {
                 ...p,
                 gallery: null,
                 created_at: new Date().toISOString()
             });
-        });
+        }
         console.log(`✅ Seeded ${seedProducts.length} products`);
     }
 }
 
-// Load and seed
-loadDB();
-seedData();
+// ===== Init =====
+async function init() {
+    if (!process.env.DATABASE_URL) {
+        console.error('❌ DATABASE_URL not set. Add your CockroachDB connection string to .env');
+        process.exit(1);
+    }
+    await createTables();
+    await seedData();
+}
 
 module.exports = {
+    pool,
+    init,
     getAll,
     getById,
     findBy,
@@ -179,6 +269,5 @@ module.exports = {
     insert,
     update,
     remove,
-    removeWhere,
-    saveDB
+    removeWhere
 };

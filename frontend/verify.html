@@ -151,6 +151,22 @@ window.addEventListener("DOMContentLoaded", function () {
     initBackToTop();
     updateAuthUI();
 
+    var emailLoginToken = new URLSearchParams(window.location.search).get("token");
+    if (emailLoginToken) {
+        var card = document.querySelector(".auth-card");
+        if (card) card.style.opacity = "0.65";
+        apiEmailLogin(emailLoginToken).then(function () {
+            localStorage.removeItem("pending_verify_email");
+            window.history.replaceState({}, document.title, "verify.html");
+            showToast("Your email is verified. You are now signed in!", "success");
+            setTimeout(function () { window.location.href = "dashboard.html"; }, 700);
+        }).catch(function (err) {
+            window.history.replaceState({}, document.title, "verify.html");
+            if (card) card.style.opacity = "1";
+            showToast(err.message || "This sign-in link is invalid or has expired.", "error");
+        });
+    }
+
     // Show which email the code was sent to
     var email = localStorage.getItem("pending_verify_email");
     var subtext = document.getElementById("verifySubtext");

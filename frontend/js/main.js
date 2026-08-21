@@ -283,10 +283,10 @@ function closeQuickView() {
     quickViewProduct = null;
 }
 
-function quickViewAddToCart() {
+async function quickViewAddToCart() {
     if (!quickViewProduct) return;
-    addToCart(quickViewProduct.id);
-    closeQuickView();
+    var added = await addToCart(quickViewProduct.id);
+    if (added) closeQuickView();
 }
 
 /* ===== Checkout / Place Order ===== */
@@ -356,6 +356,25 @@ window.addEventListener("DOMContentLoaded", function () {
             if (e.target === overlay) closeQuickView();
         });
     }
+
+    // Product cards are rendered dynamically, so one delegated listener keeps
+    // both Quick View and Add to Cart reliable on every page and device.
+    document.addEventListener("click", function (event) {
+        var button = event.target.closest("[data-product-action]");
+        if (!button) return;
+        event.preventDefault();
+        event.stopPropagation();
+        var productId = button.dataset.productId;
+        if (!productId) return;
+
+        if (button.dataset.productAction === "quick-view") {
+            openQuickView(productId).catch(function () {
+                showToast("Unable to open this product right now.", "error");
+            });
+        } else if (button.dataset.productAction === "add-cart") {
+            addToCart(productId);
+        }
+    });
 
     // Handle URL hash for category filtering
     var hash = window.location.hash;

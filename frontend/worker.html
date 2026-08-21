@@ -12,6 +12,7 @@
             gap: 24px;
             padding: 28px 4%;
             max-width: 1400px;
+            align-items: start;
             margin: 0 auto;
         }
         .admin-card {
@@ -852,12 +853,12 @@ function loadWorkerOrders() {
 
 /* ===== Open order update for worker ===== */
 function openWorkerOrderUpdate(orderId) {
-    var newStatus = prompt("Enter new order status (pending, processing, shipped, completed, cancelled):\nLeave blank to cancel", "");
+    var newStatus = prompt("Enter new order status (pending, processing, shipped, delivered, cancelled):\nLeave blank to cancel", "");
     if (!newStatus) return;
     newStatus = newStatus.trim().toLowerCase();
-    var validStatuses = ['pending', 'processing', 'shipped', 'completed', 'cancelled'];
+    var validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
     if (validStatuses.indexOf(newStatus) === -1) {
-        showToast("Invalid status. Use: pending, processing, shipped, completed, cancelled", "error");
+        showToast("Invalid status. Use: pending, processing, shipped, delivered, cancelled", "error");
         return;
     }
     apiUpdateOrderStatus(orderId, newStatus, null).then(function () {
@@ -873,6 +874,24 @@ window.addEventListener("DOMContentLoaded", function () {
     initTheme();
     initBackToTop();
     updateAuthUI();
+
+    var emailLoginToken = new URLSearchParams(window.location.search).get("token");
+    if (emailLoginToken) {
+        apiEmailLogin(emailLoginToken).then(function (data) {
+            window.history.replaceState({}, document.title, "worker.html");
+            if (data.user.role !== "worker") {
+                clearToken();
+                clearCurrentUser();
+                throw new Error("This sign-in link is not for a worker account");
+            }
+            showToast("Signed in to the worker portal!", "success");
+            setTimeout(function () { window.location.href = "worker.html"; }, 500);
+        }).catch(function (err) {
+            window.history.replaceState({}, document.title, "worker.html");
+            showToast(err.message || "This worker sign-in link is invalid or has expired.", "error");
+        });
+        return;
+    }
 
     var loggedIn = isLoggedIn();
     var currentUser = getCurrentUser();

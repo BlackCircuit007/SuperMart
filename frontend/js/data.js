@@ -80,7 +80,7 @@ function productCardHtml(p) {
         '<div class="card" data-search="' + (p.name + " " + p.category + " " + p.description).toLowerCase() + '" data-category="' + p.category + '" data-id="' + p.id + '">' +
         '<div class="card-image">' +
         (p.featured ? '<span class="card-badge diamond">Featured</span>' : "") +
-        '<button class="quickview-btn-img" onclick="event.stopPropagation();openQuickView(' + productId + ')" title="Quick view">👁</button>' +
+        '<button type="button" class="quickview-btn-img" data-product-action="quick-view" data-product-id=' + productId + ' title="Quick view">👁</button>' +
         imgHtml +
         "</div>" +
         '<div class="card-body">' +
@@ -92,8 +92,8 @@ function productCardHtml(p) {
         "</div>" +
         '<div class="price-row"><span class="price">' + price(p.price) + "</span></div>" +
         '<div class="card-actions">' +
-        '<button class="add-cart-btn" onclick="addToCart(' + productId + ')">Add to Cart</button>' +
-        '<button class="quickview-btn" onclick="openQuickView(' + productId + ')">Quick View</button>' +
+        '<button type="button" class="add-cart-btn" data-product-action="add-cart" data-product-id=' + productId + '>Add to Cart</button>' +
+        '<button type="button" class="quickview-btn" data-product-action="quick-view" data-product-id=' + productId + '>Quick View</button>' +
         "</div>" +
         "</div>" +
         "</div>"

@@ -76,6 +76,27 @@ function generateUsername(name) {
     return base + Math.floor(100 + Math.random() * 900);
 }
 
+function createSessionToken(user) {
+    return jwt.sign(
+        { id: user.id, email: user.email, name: user.name, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+    );
+}
+
+function createEmailLoginToken(user, expiresIn) {
+    return jwt.sign(
+        { id: user.id, email: user.email, role: user.role, purpose: 'email_login' },
+        JWT_SECRET,
+        { expiresIn: expiresIn || '24h' }
+    );
+}
+
+function publicUrl(pathname) {
+    const baseUrl = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+    return baseUrl + pathname;
+}
+
 // ===== AUTH ROUTES =====
 
 // Register (buyer only - workers are added by admin)
@@ -123,10 +144,11 @@ app.post('/api/register', async (req, res) => {
         });
 
         // Send verification email in the background (don't block the response)
-        sendEmailInBackground(emailService.sendVerificationEmail(email, name, code));
+        const emailLoginUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(user, '24h'))}`);
+        sendEmailInBackground(emailService.sendVerificationEmail(email, name, code, emailLoginUrl));
 
         res.status(201).json({
-            message: 'Registration successful. Check your email (and Spam/Junk folder) for the verification code.',
+            message: 'Registration successful. Use the secure sign-in button in your email, or enter the verification code.',
             userId: user.id,
             emailSent: true
         });
@@ -168,11 +190,7 @@ app.post('/api/verify', async (req, res) => {
         }
 
         // Generate token
-        const token = jwt.sign(
-            { id: user.id, email: user.email, name: user.name, role: user.role },
-            JWT_SECRET,
-            { expiresIn: '7d' }
-        );
+        const token = createSessionToken(user);
 
         res.json({
             message: 'Account verified successfully!',
@@ -221,7 +239,8 @@ app.post('/api/verify/resend', async (req, res) => {
         });
 
         // Send verification email in the background (don't block the response)
-        sendEmailInBackground(emailService.sendVerificationEmail(email, user.name, code));
+        const emailLoginUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(user, '24h'))}`);
+        sendEmailInBackground(emailService.sendVerificationEmail(email, user.name, code, emailLoginUrl));
 
         res.json({
             message: 'Verification code resent. Check your email (and Spam/Junk folder).',
@@ -230,6 +249,41 @@ app.post('/api/verify/resend', async (req, res) => {
     } catch (err) {
         console.error('Resend verification error:', err);
         res.status(500).json({ error: 'Server error during resend' });
+    }
+});
+
+// Exchange a short-lived link from an account email for a normal browser
+// session. For buyers, opening this link also completes email verification.
+app.post('/api/auth/email-login', async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) return res.status(400).json({ error: 'Sign-in link is required' });
+
+        const payload = jwt.verify(token, JWT_SECRET);
+        if (payload.purpose !== 'email_login' || !payload.id || !payload.email) {
+            return res.status(400).json({ error: 'Invalid sign-in link' });
+        }
+
+        const user = await db.getById('users', payload.id);
+        if (!user || user.email !== payload.email || user.role !== payload.role) {
+            return res.status(400).json({ error: 'This sign-in link is no longer valid' });
+        }
+
+        if (user.role === 'buyer' && Number(user.is_verified) === 0) {
+            await db.update('users', user.id, { is_verified: 1 });
+        }
+
+        res.json({
+            message: 'Signed in successfully',
+            token: createSessionToken(user),
+            user: { id: user.id, name: user.name, email: user.email, role: user.role }
+        });
+    } catch (err) {
+        if (err.name === 'TokenExpiredError') {
+            return res.status(400).json({ error: 'This sign-in link has expired. Please request a new one.' });
+        }
+        console.error('Email login error:', err);
+        res.status(400).json({ error: 'Invalid sign-in link' });
     }
 });
 
@@ -249,11 +303,10 @@ app.post('/api/login', async (req, res) => {
             await db.update('worker_codes', workerCode.id, { is_used: 1 });
 
             const user = await db.getById('users', workerCode.worker_id);
-            const token = jwt.sign(
-                { id: user.id, email: user.email, name: user.name, role: user.role },
-                JWT_SECRET,
-                { expiresIn: '7d' }
-            );
+            if (!user || user.role !== 'worker') {
+                return res.status(400).json({ error: 'Invalid login code' });
+            }
+            const token = createSessionToken(user);
 
             return res.json({
                 message: 'Welcome back!',
@@ -286,11 +339,7 @@ app.post('/api/login', async (req, res) => {
             return res.status(403).json({ error: 'Please verify your email first' });
         }
 
-        const token = jwt.sign(
-            { id: user.id, email: user.email, name: user.name, role: user.role },
-            JWT_SECRET,
-            { expiresIn: '7d' }
-        );
+        const token = createSessionToken(user);
 
         res.json({
             message: 'Login successful!',
@@ -440,6 +489,7 @@ app.post('/api/orders', authRequired, async (req, res) => {
             total: parseFloat(total),
             items: JSON.stringify(items),
             status: 'pending',
+            delivered: 0,
             created_at: new Date().toISOString()
         });
 
@@ -498,14 +548,17 @@ app.get('/api/admin/orders', authRequired, workerOrAdminRequired, async (req, re
 // Update order status (admin/worker)
 app.put('/api/admin/orders/:id', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
-        const { status, payment_status } = req.body;
+        const { status, payment_status, delivered } = req.body;
         const existing = await db.getById('orders', req.params.id);
         if (!existing) return res.status(404).json({ error: 'Order not found' });
 
-        await db.update('orders', existing.id, {
+        const updatedOrder = await db.update('orders', existing.id, {
             status: status || existing.status,
-            payment_status: payment_status || existing.payment_status
+            payment_status: payment_status || existing.payment_status,
+            delivered: delivered !== undefined ? (delivered ? 1 : 0) : (status === 'delivered' ? 1 : existing.delivered)
         });
+
+        sendEmailInBackground(emailService.sendOrderStatusEmail(updatedOrder));
 
         res.json({ message: 'Order updated' });
     } catch (err) {
@@ -580,7 +633,11 @@ app.get('/api/payments/verify/:id', async (req, res) => {
         // Update order payment status
         const order = await db.findBy('orders', o => o.order_ref === payment.order_ref);
         if (order) {
-            await db.update('orders', order.id, { payment_status: 'verified' });
+            const updatedOrder = await db.update('orders', order.id, {
+                payment_status: 'verified',
+                status: order.status === 'pending' ? 'processing' : order.status
+            });
+            sendEmailInBackground(emailService.sendOrderStatusEmail(updatedOrder));
         }
 
         res.send(`
@@ -675,7 +732,8 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
 
         let emailWarning = null;
         try {
-            await sendEmailWithTimeout(emailService.sendWorkerCredentialsEmail(email, name, username, loginCode));
+            const emailLoginUrl = publicUrl(`/worker.html?token=${encodeURIComponent(createEmailLoginToken(worker, '7d'))}`);
+            await sendEmailWithTimeout(emailService.sendWorkerCredentialsEmail(email, name, username, loginCode, emailLoginUrl));
         } catch (emailError) {
             console.error('Worker credentials email error:', emailError.message);
             emailWarning = 'Worker created, but the credentials email could not be sent: ' + emailError.message;
@@ -908,6 +966,10 @@ app.get('/api/cart', authRequired, async (req, res) => {
 // ===== Health check =====
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'TriumphsMart API is running' });
+});
+
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
 });
 
 // Start server

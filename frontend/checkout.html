@@ -253,7 +253,7 @@
 
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
                     showToast("Order placed successfully!", "success");
-                    window.location.href = "finally.html?ref=" + result.orderRef;
+                    window.location.href = "finally.html?ref=" + encodeURIComponent(result.orderRef) + "&payment=cash";
                 } catch (err) {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
                     showToast(err.message || "Failed to place order", "error");
@@ -366,7 +366,7 @@
                     updateCartCount();
                     setVerificationStatus("Payment verification submitted. Awaiting manual confirmation.");
                     alert("Payment verification submitted for order " + order.orderRef + ".");
-                    window.location.href = "finally.html?ref=" + order.orderRef;
+                    window.location.href = "finally.html?ref=" + encodeURIComponent(order.orderRef) + "&payment=transfer";
                 } catch (err) {
                     setVerificationButtonLoading(btn, false);
                     setVerificationStatus("");

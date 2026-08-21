@@ -418,10 +418,16 @@ async function renderDashboard() {
         } else {
             ordersList.innerHTML = "";
             orders.forEach(function (order) {
+                var paymentText = order.payment_method === 'cash'
+                    ? 'Cash on delivery (pay at delivery)'
+                    : order.payment_status === 'verified' ? 'Paid' : 'Payment awaiting verification';
+                var deliveryText = Number(order.delivered) === 1 || order.status === 'delivered'
+                    ? 'Delivered'
+                    : 'Not delivered yet';
                 var div = document.createElement("div");
                 div.className = "dash-order-item";
                 div.innerHTML =
-                    '<div><div class="order-ref">' + order.order_ref + '</div><div class="order-date">' + new Date(order.created_at).toLocaleString() + '</div></div>' +
+                    '<div><div class="order-ref">' + order.order_ref + '</div><div class="order-date">' + new Date(order.created_at).toLocaleString() + '</div><div class="order-date">Payment: <strong>' + paymentText + '</strong></div><div class="order-date">Delivery: <strong>' + deliveryText + '</strong></div></div>' +
                     '<div class="order-total">₦' + Number(order.total).toLocaleString() + '</div>';
                 ordersList.appendChild(div);
             });
@@ -454,6 +460,14 @@ window.addEventListener("DOMContentLoaded", function () {
     updateAuthUI();
     setupTabs();
     renderDashboard();
+
+    if (new URLSearchParams(window.location.search).get("tab") === "orders") {
+        var ordersTab = document.querySelector('.dash-nav a[data-tab="orders"]');
+        if (ordersTab) ordersTab.click();
+    }
+
+    // Staff updates and payment verification show up without a manual reload.
+    window.setInterval(renderDashboard, 15000);
 
     var logoutBtn = document.getElementById("dashLogoutBtn");
     if (logoutBtn) {

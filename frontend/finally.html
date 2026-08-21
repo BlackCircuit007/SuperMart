@@ -47,9 +47,10 @@
         <h1>Order Confirmed!</h1>
         <p>Thank you for shopping with TriumphsMart. Your order has been received and will be processed shortly.</p>
         <div class="order-ref" id="orderRef"></div>
+        <p id="orderStatus" style="margin-top:12px;color:var(--c-text-secondary);"></p>
         <div class="hero-actions" style="justify-content:center;margin-top:24px;">
             <a href="products.html" class="primary-btn" style="background:var(--c-primary);color:#fff;">Continue Shopping</a>
-            <a href="dashboard.html" class="secondary-btn" style="background:#f5f7f9;color:var(--c-text);border:1px solid var(--c-border);">View My Orders</a>
+            <a href="dashboard.html?tab=orders" class="secondary-btn" style="background:#f5f7f9;color:var(--c-text);border:1px solid var(--c-border);">View My Orders</a>
         </div>
     </section>
 </main>
@@ -70,10 +71,29 @@ window.addEventListener("DOMContentLoaded", function () {
     updateAuthUI();
     var params = new URLSearchParams(window.location.search);
     var ref = params.get("ref");
+    var payment = params.get("payment");
     var el = document.getElementById("orderRef");
     if (el) {
         el.textContent = ref ? "Your order reference: " + ref : "Your order reference: TM" + Date.now().toString().slice(-8);
     }
+    var statusEl = document.getElementById("orderStatus");
+    async function refreshOrderStatus() {
+        if (!ref || !statusEl || !isLoggedIn()) return;
+        try {
+            var orders = await apiGetMyOrders();
+            var order = orders.find(function (item) { return item.order_ref === ref; });
+            if (!order) return;
+            if (order.payment_method === "cash") {
+                statusEl.textContent = "Cash on delivery: payment will be verified when your order is delivered. Order status: " + (order.status || "pending") + ".";
+            } else {
+                statusEl.textContent = "Order status: " + (order.status || "pending") + ". Payment status: " + (order.payment_status || "pending") + ". This page refreshes automatically while you wait.";
+            }
+        } catch (err) {
+            statusEl.textContent = payment === "cash" ? "Cash payment will be verified on delivery." : "Your order is saved. Check My Orders for updates.";
+        }
+    }
+    refreshOrderStatus();
+    if (ref) window.setInterval(refreshOrderStatus, 15000);
 });
 </script>
 </body>

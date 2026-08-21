@@ -85,6 +85,33 @@ button, input, select, textarea {
     -webkit-tap-highlight-color: transparent;
 }
 
+/* Server actions lock immediately and show that the request is in progress. */
+button.is-request-pending,
+input.is-request-pending,
+a.is-request-pending {
+    cursor: wait !important;
+    opacity: 0.72;
+    pointer-events: none;
+}
+
+button.is-request-pending::after,
+a.is-request-pending::after {
+    content: '';
+    display: inline-block;
+    width: 0.78em;
+    height: 0.78em;
+    margin-left: 0.5em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -0.08em;
+    animation: request-spin 0.65s linear infinite;
+}
+
+@keyframes request-spin {
+    to { transform: rotate(360deg); }
+}
+
 img {
     max-width: 100%;
     display: block;

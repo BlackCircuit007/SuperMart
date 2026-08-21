@@ -4,7 +4,10 @@
  *  Uses JWT tokens stored in localStorage for authentication.
  * ============================================================ */
 
-const API_BASE = window.location.origin; // Same origin as the server
+const API_BASE = window.TRIUMPHSMART_API_BASE ||
+    ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000'
+        ? 'http://localhost:3000'
+        : window.location.origin);
 
 // ===== Token Management =====
 function getToken() {
@@ -46,8 +49,38 @@ function logout() {
     window.location.href = 'index.html';
 }
 
+// Give immediate feedback for every action that makes a server-side change.
+// This stops accidental duplicate registrations, orders, product changes, and
+// worker/admin actions while a slow request is still in progress.
+function setRequestControlLoading(method) {
+    if (method === 'GET' || method === 'HEAD') return function () {};
+
+    const active = document.activeElement;
+    const control = active && active.closest
+        ? active.closest('button, input[type="submit"], a')
+        : null;
+    if (!control || control.dataset.requestPending === 'true') return function () {};
+
+    const wasDisabled = 'disabled' in control ? control.disabled : false;
+    const previousBusy = control.getAttribute('aria-busy');
+    control.dataset.requestPending = 'true';
+    control.classList.add('is-request-pending');
+    control.setAttribute('aria-busy', 'true');
+    if ('disabled' in control) control.disabled = true;
+
+    return function () {
+        delete control.dataset.requestPending;
+        control.classList.remove('is-request-pending');
+        if (previousBusy === null) control.removeAttribute('aria-busy');
+        else control.setAttribute('aria-busy', previousBusy);
+        if ('disabled' in control) control.disabled = wasDisabled;
+    };
+}
+
 // ===== API Request Helper =====
 async function apiRequest(endpoint, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const clearLoadingState = setRequestControlLoading(method);
     const headers = {
         'Content-Type': 'application/json',
         ...(options.headers || {})
@@ -58,21 +91,25 @@ async function apiRequest(endpoint, options = {}) {
         headers['Authorization'] = 'Bearer ' + token;
     }
 
-    const response = await fetch(API_BASE + endpoint, {
-        ...options,
-        headers
-    });
+    try {
+        const response = await fetch(API_BASE + endpoint, {
+            ...options,
+            headers
+        });
 
-    const data = await response.json().catch(() => ({}));
+        const data = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-        const error = new Error(data.error || 'Request failed');
-        error.status = response.status;
-        error.data = data;
-        throw error;
+        if (!response.ok) {
+            const error = new Error(data.error || 'Request failed');
+            error.status = response.status;
+            error.data = data;
+            throw error;
+        }
+
+        return data;
+    } finally {
+        clearLoadingState();
     }
-
-    return data;
 }
 
 // ===== Auth API =====
@@ -98,6 +135,16 @@ async function apiResendVerification(email) {
         method: 'POST',
         body: JSON.stringify({ email })
     });
+}
+
+async function apiEmailLogin(token) {
+    const data = await apiRequest('/api/auth/email-login', {
+        method: 'POST',
+        body: JSON.stringify({ token })
+    });
+    setToken(data.token);
+    setCurrentUser(data.user);
+    return data;
 }
 
 async function apiLogin(email, password, loginCode) {
@@ -307,21 +354,27 @@ async function addToCart(id) {
     if (!user) {
         showToast('Please login first', 'error');
         setTimeout(function () { window.location.href = 'login.html'; }, 1200);
-        return;
+        return false;
     }
-    const product = await apiGetProduct(id).catch(() => null);
-    if (!product) { showToast('Product not found', 'error'); return; }
+    try {
+        const product = await apiGetProduct(id);
+        if (!product) { showToast('Product not found', 'error'); return false; }
 
-    const cart = await getCartItems();
-    const existingItem = cart.find(item => String(item.id) === String(id));
-    if (existingItem) {
-        existingItem.quantity += 1;
-    } else {
-        cart.push({ id: id, name: product.name, price: product.price, quantity: 1, image: product.image });
+        const cart = await getCartItems();
+        const existingItem = cart.find(item => String(item.id) === String(id));
+        if (existingItem) {
+            existingItem.quantity += 1;
+        } else {
+            cart.push({ id: id, name: product.name, price: product.price, quantity: 1, image: product.image });
+        }
+        await apiSaveCart(cart);
+        await updateCartCount();
+        showAddedToast(product.name);
+        return true;
+    } catch (err) {
+        showToast(err.message || 'Could not add this item to your cart. Please try again.', 'error');
+        return false;
     }
-    await apiSaveCart(cart);
-    updateCartCount();
-    showAddedToast(product.name);
 }
 
 async function updateCartCount() {
@@ -330,9 +383,14 @@ async function updateCartCount() {
         if (count) { count.textContent = 0; count.style.display = 'none'; }
         return;
     }
-    const cart = await getCartItems();
-    const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-    if (count) { count.textContent = totalItems; count.style.display = totalItems > 0 ? 'inline-flex' : 'none'; }
+    try {
+        const cart = await getCartItems();
+        const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+        if (count) { count.textContent = totalItems; count.style.display = totalItems > 0 ? 'inline-flex' : 'none'; }
+    } catch (err) {
+        // A stale session must not break page rendering or product buttons.
+        if (count) { count.textContent = 0; count.style.display = 'none'; }
+    }
 }
 
 // ===== Toast Notifications =====

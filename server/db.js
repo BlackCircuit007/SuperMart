@@ -62,9 +62,13 @@ async function createTables() {
                 total NUMERIC NOT NULL,
                 items TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
+                delivered INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             )
         `);
+
+        // Existing databases need this migration too.
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered INTEGER NOT NULL DEFAULT 0`);
 
         // Verification codes table
         await client.query(`

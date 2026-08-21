@@ -190,10 +190,10 @@ async function removeWhere(collection, predicate) {
 // ===== Seed data =====
 async function seedData() {
     // Seed admin user
-    const adminEmail = 'admin@triumphsmart.com';
+    const adminEmail = 'admin';
     const adminExists = await findBy('users', u => u.email === adminEmail);
     if (!adminExists) {
-        const hashedPassword = bcrypt.hashSync('admin123', 10);
+        const hashedPassword = bcrypt.hashSync('admin', 10);
         await insert('users', {
             name: 'Admin',
             email: adminEmail,
@@ -247,7 +247,7 @@ async function seedData() {
 //         }
 //         console.log(`✅ Seeded ${seedProducts.length} products`);
 //     }
-// }
+}  
 
 // ===== Init =====
 async function init() {

@@ -227,6 +227,12 @@
                 var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
                 var paymentMethod = document.querySelector("input[name='payment']:checked").value;
 
+                if (paymentMethod === "transfer") {
+                    showToast("Use Verify Payment to submit your transfer", "error");
+                    openPaymentModal();
+                    return;
+                }
+
                 var submitBtn = document.querySelector(".checkout-btn[onclick='finalizeCheckout()']");
                 if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Placing order..."; }
 
@@ -306,10 +312,20 @@
 
             // ---- Payment verification: send to backend ----
             async function handleVerifyPayment() {
+                var user = getCurrentUser();
                 var phone = document.getElementById("payerPhoneInput") ? document.getElementById("payerPhoneInput").value.trim() : "";
                 var amount = document.getElementById("paymentAmountInput") ? document.getElementById("paymentAmountInput").value.trim() : "";
                 var ref = document.getElementById("paymentRefInput") ? document.getElementById("paymentRefInput").value.trim() : "";
                 var btn = document.getElementById(CONFIRM_PAID_BTN_ID);
+
+                var name = document.getElementById("shipping_name").value.trim();
+                var email = document.getElementById("shipping_email").value.trim();
+                var shippingPhone = document.getElementById("shipping_phone").value.trim();
+                var address = document.getElementById("shipping_address").value.trim();
+                if (!name || !email || !shippingPhone || !address) {
+                    alert("Please complete your shipping information first.");
+                    return;
+                }
 
                 if (!phone || !amount || !ref) {
                     alert("Please fill phone, amount and transaction reference.");
@@ -320,17 +336,37 @@
                 setVerificationStatus("Sending your verification request. Please wait...");
 
                 try {
+                    var cart = await getCartItems();
+                    var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
+                    if (cart.length === 0) throw new Error("Your cart is empty");
+                    if (Math.abs(Number(amount) - total) > 0.01) {
+                        throw new Error("The amount paid must match the order total.");
+                    }
+
+                    var order = await apiPlaceOrder({
+                        customer_name: name,
+                        customer_email: email,
+                        customer_phone: shippingPhone,
+                        shipping_address: address,
+                        payment_method: "transfer",
+                        items: cart,
+                        total: total
+                    });
+
                     var result = await apiSubmitPaymentVerification({
-                        order_ref: "PENDING-" + Date.now().toString().slice(-8),
-                        payer_name: getCurrentUser() ? getCurrentUser().name : "Customer",
-                        payer_email: document.getElementById("shipping_email") ? document.getElementById("shipping_email").value.trim() : "",
+                        order_ref: order.orderRef,
+                        payer_name: user ? user.name : name,
+                        payer_email: email,
                         payer_phone: phone,
                         amount: parseFloat(amount),
                         transaction_ref: ref
                     });
 
-                    setVerificationStatus("Payment verification email sent to the owner. Awaiting manual confirmation.");
-                    alert("Payment verification email sent to the owner! They will verify your payment and notify you.");
+                    await apiSaveCart([]);
+                    updateCartCount();
+                    setVerificationStatus("Payment verification submitted. Awaiting manual confirmation.");
+                    alert("Payment verification submitted for order " + order.orderRef + ".");
+                    window.location.href = "finally.html?ref=" + order.orderRef;
                 } catch (err) {
                     setVerificationButtonLoading(btn, false);
                     setVerificationStatus("");

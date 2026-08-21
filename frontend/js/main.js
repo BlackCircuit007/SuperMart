@@ -116,7 +116,7 @@ function bindSearch(container) {
         card.addEventListener("click", function (e) {
             var btn = e.target.closest("button");
             if (btn) return; // button clicks handled by onclick
-            var id = parseInt(card.dataset.id);
+            var id = card.dataset.id;
             if (id) openQuickView(id);
         });
     });
@@ -238,11 +238,26 @@ function applyFilters() {
 /* ===== Quick View ===== */
 var quickViewProduct = null;
 
-function openQuickView(id) {
+async function openQuickView(id) {
     var product = findProductById(id);
-    if (!product) return;
+    if (!product) {
+        product = await apiGetProduct(id).catch(function () { return null; });
+        if (product) {
+            var products = getProducts();
+            var existingIndex = products.findIndex(function (item) {
+                return String(item.id) === String(product.id);
+            });
+            if (existingIndex >= 0) products[existingIndex] = product;
+            else products.push(product);
+            saveProducts(products);
+        }
+    }
+    if (!product) {
+        showToast("Product not found", "error");
+        return;
+    }
 
-    quickViewProduct = { id: id, name: product.name, price: product.price };
+    quickViewProduct = { id: product.id, name: product.name, price: product.price };
 
     var overlay = document.getElementById("quickviewOverlay");
     if (!overlay) return;

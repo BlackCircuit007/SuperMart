@@ -4,19 +4,27 @@ require('dotenv').config();
 // Create transporter using Gmail SMTP
 const transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_ADDRESS || 'goodluckiyke2010@gmail.com',
-        pass: process.env.EMAIL_APP_PASSWORD || 'pkum ickf gtfx wstu'
-    }
+    auth: process.env.EMAIL_ADDRESS && process.env.EMAIL_APP_PASSWORD
+        ? { user: process.env.EMAIL_ADDRESS, pass: process.env.EMAIL_APP_PASSWORD }
+        : undefined
 });
 
-const OWNER_EMAIL = process.env.EMAIL_ADDRESS || 'goodluckiyke2010@gmail.com';
+const OWNER_EMAIL = process.env.EMAIL_ADDRESS;
 const STORE_NAME = 'TriumphsMart';
+
+function getEmailConfigurationError() {
+    if (!process.env.EMAIL_ADDRESS || !process.env.EMAIL_APP_PASSWORD) {
+        return new Error('Email is not configured. Set EMAIL_ADDRESS and EMAIL_APP_PASSWORD in .env.');
+    }
+    return null;
+}
 
 /**
  * Send verification code email
  */
 async function sendVerificationEmail(toEmail, toName, code) {
+    const configurationError = getEmailConfigurationError();
+    if (configurationError) throw configurationError;
     const mailOptions = {
         from: `"${STORE_NAME}" <${OWNER_EMAIL}>`,
         to: toEmail,
@@ -51,6 +59,8 @@ async function sendVerificationEmail(toEmail, toName, code) {
  * Send cash on delivery notification to owner
  */
 async function sendCashOnDeliveryEmail(order) {
+    const configurationError = getEmailConfigurationError();
+    if (configurationError) throw configurationError;
     const itemsHtml = order.items.map(item => `
         <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
@@ -118,6 +128,8 @@ async function sendCashOnDeliveryEmail(order) {
  * Send payment verification email to owner with verify button
  */
 async function sendPaymentVerificationEmail(details) {
+    const configurationError = getEmailConfigurationError();
+    if (configurationError) throw configurationError;
     const verifyUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/payments/verify/${details.paymentId}`;
     const rejectUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/api/payments/reject/${details.paymentId}`;
 
@@ -165,6 +177,8 @@ async function sendPaymentVerificationEmail(details) {
  * Send order confirmation to customer
  */
 async function sendOrderConfirmationEmail(order) {
+    const configurationError = getEmailConfigurationError();
+    if (configurationError) throw configurationError;
     const itemsHtml = order.items.map(item => `
         <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
@@ -228,6 +242,8 @@ async function sendOrderConfirmationEmail(order) {
  * Send worker login credentials email
  */
 async function sendWorkerCredentialsEmail(workerEmail, workerName, username, loginCode) {
+    const configurationError = getEmailConfigurationError();
+    if (configurationError) throw configurationError;
     const mailOptions = {
         from: `"${STORE_NAME}" <${OWNER_EMAIL}>`,
         to: workerEmail,

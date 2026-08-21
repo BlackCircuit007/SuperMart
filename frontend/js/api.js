@@ -204,9 +204,18 @@ async function apiGetAdminStats() {
 
 // ===== Cart API =====
 async function apiSaveCart(items) {
+    const normalizedItems = (items || []).map(function (item) {
+        return {
+            id: item.id,
+            name: item.name,
+            price: Number(item.price) || 0,
+            quantity: Math.max(1, Number(item.quantity) || 1),
+            image: item.image || '🛍️'
+        };
+    });
     return apiRequest('/api/cart', {
         method: 'POST',
-        body: JSON.stringify({ items })
+        body: JSON.stringify({ items: normalizedItems })
     });
 }
 
@@ -281,12 +290,16 @@ function updateAuthUI() {
 // ===== Cart Functions (server-backed) =====
 async function getCartItems() {
     if (!isLoggedIn()) return [];
-    try {
-        return await apiGetCart();
-    } catch (e) {
-        console.warn('Failed to load cart:', e);
-        return [];
-    }
+    const items = await apiGetCart();
+    return (items || []).map(function (item) {
+        return {
+            id: item.id,
+            name: item.name || 'Unknown product',
+            price: Number(item.price) || 0,
+            quantity: Math.max(1, Number(item.quantity) || 1),
+            image: item.image || '🛍️'
+        };
+    });
 }
 
 async function addToCart(id) {
@@ -300,7 +313,7 @@ async function addToCart(id) {
     if (!product) { showToast('Product not found', 'error'); return; }
 
     const cart = await getCartItems();
-    const existingItem = cart.find(item => item.id === id);
+    const existingItem = cart.find(item => String(item.id) === String(id));
     if (existingItem) {
         existingItem.quantity += 1;
     } else {

@@ -41,7 +41,7 @@ function getCategories() {
 
 /* ---- Product lookup ---------------------------------------- */
 function findProductById(id) {
-    return getProducts().find(function (p) { return p.id === id; });
+    return getProducts().find(function (p) { return String(p.id) === String(id); });
 }
 
 /* ---- Admin: add / remove (via API) ------------------------ */
@@ -72,6 +72,7 @@ function ratingStars(r) {
 }
 
 function productCardHtml(p) {
+    var productId = JSON.stringify(String(p.id));
     var imgHtml = p.image && (String(p.image).indexOf("data:") === 0 || String(p.image).indexOf("http") === 0)
         ? '<img src="' + p.image + '" alt="' + p.name + '">'
         : '<span class="card-icon">' + (p.image || "🛍️") + "</span>";
@@ -79,7 +80,7 @@ function productCardHtml(p) {
         '<div class="card" data-search="' + (p.name + " " + p.category + " " + p.description).toLowerCase() + '" data-category="' + p.category + '" data-id="' + p.id + '">' +
         '<div class="card-image">' +
         (p.featured ? '<span class="card-badge diamond">Featured</span>' : "") +
-        '<button class="quickview-btn-img" onclick="event.stopPropagation();openQuickView(' + p.id + ')" title="Quick view">👁</button>' +
+        '<button class="quickview-btn-img" onclick="event.stopPropagation();openQuickView(' + productId + ')" title="Quick view">👁</button>' +
         imgHtml +
         "</div>" +
         '<div class="card-body">' +
@@ -91,8 +92,8 @@ function productCardHtml(p) {
         "</div>" +
         '<div class="price-row"><span class="price">' + price(p.price) + "</span></div>" +
         '<div class="card-actions">' +
-        '<button class="add-cart-btn" onclick="addToCart(' + p.id + ')">Add to Cart</button>' +
-        '<button class="quickview-btn" onclick="openQuickView(' + p.id + ')">Quick View</button>' +
+        '<button class="add-cart-btn" onclick="addToCart(' + productId + ')">Add to Cart</button>' +
+        '<button class="quickview-btn" onclick="openQuickView(' + productId + ')">Quick View</button>' +
         "</div>" +
         "</div>" +
         "</div>"

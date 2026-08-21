@@ -197,7 +197,17 @@ async function renderCart() {
         return;
     }
 
-    var cart = await getCartItems();
+    var cart;
+    try {
+        cart = await getCartItems();
+    } catch (err) {
+        container.innerHTML = '<div class="empty-cart"><div class="big">!</div><h3>Could not load your cart</h3><p style="margin-top:8px;">Please refresh the page or log in again.</p><button class="primary-btn" style="margin-top:16px;background:var(--c-primary);color:#fff;border:none;cursor:pointer;" onclick="window.location.reload()">Retry</button></div>';
+        if (totalEl) totalEl.innerText = "NGN 0";
+        if (subtotalEl) subtotalEl.innerText = "NGN 0";
+        if (cartInline) cartInline.textContent = "0";
+        console.error('Cart load failed:', err);
+        return;
+    }
     var total = 0;
     var count = 0;
 

@@ -56,6 +56,13 @@ function sendEmailInBackground(emailPromise) {
     ]).catch(err => console.error('Background email error:', err.message));
 }
 
+async function sendEmailWithTimeout(emailPromise) {
+    return Promise.race([
+        emailPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timed out')), 10000))
+    ]);
+}
+
 function generateOrderRef() {
     return 'TM' + Date.now().toString().slice(-8) + Math.floor(Math.random() * 100);
 }
@@ -412,8 +419,11 @@ app.post('/api/orders', authRequired, async (req, res) => {
     try {
         const { customer_name, customer_email, customer_phone, shipping_address, payment_method, items, total } = req.body;
 
-        if (!customer_name || !customer_email || !customer_phone || !shipping_address || !payment_method || !items || items.length === 0) {
+        if (!customer_name || !customer_email || !customer_phone || !shipping_address || !payment_method || !items || items.length === 0 || !Number.isFinite(Number(total)) || Number(total) <= 0) {
             return res.status(400).json({ error: 'All order fields are required' });
+        }
+        if (payment_method !== 'cash' && payment_method !== 'transfer') {
+            return res.status(400).json({ error: 'Invalid payment method' });
         }
 
         const orderRef = generateOrderRef();
@@ -510,8 +520,20 @@ app.put('/api/admin/orders/:id', authRequired, workerOrAdminRequired, async (req
 app.post('/api/payments/verify', authRequired, async (req, res) => {
     try {
         const { order_ref, payer_name, payer_phone, payer_email, amount, transaction_ref } = req.body;
-        if (!order_ref || !payer_phone || !amount || !transaction_ref) {
+        if (!order_ref || !payer_phone || !amount || !transaction_ref || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
             return res.status(400).json({ error: 'All payment details are required' });
+        }
+
+        const order = await db.findBy('orders', o => o.order_ref === order_ref && String(o.user_id) === String(req.user.id));
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (order.payment_method !== 'transfer') {
+            return res.status(400).json({ error: 'This order does not require transfer verification' });
+        }
+        if (order.payment_status !== 'pending') {
+            return res.status(409).json({ error: 'This order payment has already been processed' });
+        }
+        if (Math.abs(Number(order.total) - Number(amount)) > 0.01) {
+            return res.status(400).json({ error: 'Payment amount does not match the order total' });
         }
 
         const payment = await db.insert('payment_verifications', {
@@ -551,6 +573,7 @@ app.get('/api/payments/verify/:id', async (req, res) => {
     try {
         const payment = await db.getById('payment_verifications', req.params.id);
         if (!payment) return res.status(404).send('Payment verification not found');
+        if (payment.status !== 'pending') return res.status(409).send('Payment verification has already been processed');
 
         await db.update('payment_verifications', payment.id, { status: 'verified' });
 
@@ -585,6 +608,7 @@ app.get('/api/payments/reject/:id', async (req, res) => {
     try {
         const payment = await db.getById('payment_verifications', req.params.id);
         if (!payment) return res.status(404).send('Payment verification not found');
+        if (payment.status !== 'pending') return res.status(409).send('Payment verification has already been processed');
 
         await db.update('payment_verifications', payment.id, { status: 'rejected' });
 
@@ -649,11 +673,17 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
             created_at: new Date().toISOString()
         });
 
-        // Send credentials email in the background (don't block the response)
-        sendEmailInBackground(emailService.sendWorkerCredentialsEmail(email, name, username, loginCode));
+        let emailWarning = null;
+        try {
+            await sendEmailWithTimeout(emailService.sendWorkerCredentialsEmail(email, name, username, loginCode));
+        } catch (emailError) {
+            console.error('Worker credentials email error:', emailError.message);
+            emailWarning = 'Worker created, but the credentials email could not be sent: ' + emailError.message;
+        }
 
         res.status(201).json({
-            message: 'Worker added successfully. Login credentials sent to their email.',
+            message: emailWarning || 'Worker added successfully. Login credentials sent to their email.',
+            emailWarning,
             worker: {
                 id: worker.id,
                 name,

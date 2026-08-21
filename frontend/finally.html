@@ -84,9 +84,9 @@ window.addEventListener("DOMContentLoaded", function () {
             var order = orders.find(function (item) { return item.order_ref === ref; });
             if (!order) return;
             if (order.payment_method === "cash") {
-                statusEl.textContent = "Cash on delivery: payment will be verified when your order is delivered. Order status: " + (order.status || "pending") + ".";
+                statusEl.textContent = "Cash on delivery: you will pay when the order arrives. Delivery: " + ((Number(order.delivered) === 1 || order.status === "delivered") ? "Delivered" : "Not delivered yet") + ".";
             } else {
-                statusEl.textContent = "Order status: " + (order.status || "pending") + ". Payment status: " + (order.payment_status || "pending") + ". This page refreshes automatically while you wait.";
+                statusEl.textContent = "Payment: " + (order.payment_status === "verified" ? "Paid" : "Awaiting verification") + ". Delivery: " + ((Number(order.delivered) === 1 || order.status === "delivered") ? "Delivered" : "Not delivered yet") + ". This page refreshes automatically while you wait.";
             }
         } catch (err) {
             statusEl.textContent = payment === "cash" ? "Cash payment will be verified on delivery." : "Your order is saved. Check My Orders for updates.";

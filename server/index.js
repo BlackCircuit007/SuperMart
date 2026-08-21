@@ -97,6 +97,28 @@ function publicUrl(pathname) {
     return baseUrl + pathname;
 }
 
+async function createAndSendVerification(user) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    await db.insert('verification_codes', {
+        email: user.email,
+        code,
+        purpose: 'register',
+        expires_at: expiresAt,
+        used: 0,
+        created_at: new Date().toISOString()
+    });
+
+    const emailLoginUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(user, '24h'))}`);
+    try {
+        await sendEmailWithTimeout(emailService.sendVerificationEmail(user.email, user.name, code, emailLoginUrl));
+        return { emailSent: true };
+    } catch (error) {
+        console.error('Verification email error:', error.message);
+        return { emailSent: false, emailWarning: 'Your account was created, but the email could not be sent. Please use Resend verification code in a moment.' };
+    }
+}
+
 // ===== AUTH ROUTES =====
 
 // Register (buyer only - workers are added by admin)
@@ -113,7 +135,17 @@ app.post('/api/register', async (req, res) => {
         // Check if user exists
         const existing = await db.findBy('users', u => u.email === email.toLowerCase());
         if (existing) {
-            return res.status(400).json({ error: 'Email already registered' });
+            if (Number(existing.is_verified) === 0 && existing.role === 'buyer') {
+                const delivery = await createAndSendVerification(existing);
+                return res.status(200).json({
+                    message: delivery.emailSent
+                        ? 'This account is awaiting verification. A fresh verification code has been sent.'
+                        : delivery.emailWarning,
+                    userId: existing.id,
+                    ...delivery
+                });
+            }
+            return res.status(400).json({ error: 'Email already registered. Please log in instead.' });
         }
 
         // Hash password
@@ -130,27 +162,14 @@ app.post('/api/register', async (req, res) => {
             created_at: new Date().toISOString()
         });
 
-        // Generate verification code
-        const code = String(Math.floor(100000 + Math.random() * 900000));
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-        await db.insert('verification_codes', {
-            email: email.toLowerCase(),
-            code,
-            purpose: 'register',
-            expires_at: expiresAt,
-            used: 0,
-            created_at: new Date().toISOString()
-        });
-
-        // Send verification email in the background (don't block the response)
-        const emailLoginUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(user, '24h'))}`);
-        sendEmailInBackground(emailService.sendVerificationEmail(email, name, code, emailLoginUrl));
+        const delivery = await createAndSendVerification(user);
 
         res.status(201).json({
-            message: 'Registration successful. Use the secure sign-in button in your email, or enter the verification code.',
+            message: delivery.emailSent
+                ? 'Registration successful. Use the secure sign-in button in your email, or enter the verification code.'
+                : delivery.emailWarning,
             userId: user.id,
-            emailSent: true
+            ...delivery
         });
     } catch (err) {
         console.error('Register error:', err);
@@ -225,26 +244,11 @@ app.post('/api/verify/resend', async (req, res) => {
             return res.status(400).json({ error: 'Account is already verified' });
         }
 
-        // Generate new verification code
-        const code = String(Math.floor(100000 + Math.random() * 900000));
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-        await db.insert('verification_codes', {
-            email: email.toLowerCase(),
-            code,
-            purpose: 'register',
-            expires_at: expiresAt,
-            used: 0,
-            created_at: new Date().toISOString()
-        });
-
-        // Send verification email in the background (don't block the response)
-        const emailLoginUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(user, '24h'))}`);
-        sendEmailInBackground(emailService.sendVerificationEmail(email, user.name, code, emailLoginUrl));
+        const delivery = await createAndSendVerification(user);
 
         res.json({
-            message: 'Verification code resent. Check your email (and Spam/Junk folder).',
-            emailSent: true
+            message: delivery.emailSent ? 'Verification code resent. Check your email (and Spam/Junk folder).' : delivery.emailWarning,
+            ...delivery
         });
     } catch (err) {
         console.error('Resend verification error:', err);

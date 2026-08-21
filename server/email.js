@@ -302,7 +302,20 @@ async function sendOrderStatusEmail(order) {
     });
 }
 
+function isEmailConfigured() {
+    return Boolean(process.env.EMAIL_ADDRESS && process.env.EMAIL_APP_PASSWORD);
+}
+
+async function verifyEmailConnection() {
+    const configurationError = getEmailConfigurationError();
+    if (configurationError) throw configurationError;
+    await transporter.verify();
+    return true;
+}
+
 module.exports = {
+    isEmailConfigured,
+    verifyEmailConnection,
     sendVerificationEmail,
     sendCashOnDeliveryEmail,
     sendPaymentVerificationEmail,

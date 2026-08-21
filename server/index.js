@@ -969,7 +969,11 @@ app.get('/api/cart', authRequired, async (req, res) => {
 
 // ===== Health check =====
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: 'TriumphsMart API is running' });
+    res.json({
+        status: 'ok',
+        message: 'TriumphsMart API is running',
+        emailConfigured: emailService.isEmailConfigured()
+    });
 });
 
 app.use('/api', (req, res) => {
@@ -978,6 +982,11 @@ app.use('/api', (req, res) => {
 
 // Start server
 db.init().then(() => {
+    // Deployment logs will show an actionable mail configuration error without
+    // exposing the email address, app password, or any other secret.
+    emailService.verifyEmailConnection()
+        .then(() => console.log('Email service connection verified'))
+        .catch(err => console.error('Email service is unavailable:', err.message));
     app.listen(PORT, () => {
         console.log(`🚀 TriumphsMart server running on http://localhost:${PORT}`);
         console.log(`📊 API available at http://localhost:${PORT}/api`);

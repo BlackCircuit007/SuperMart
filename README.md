@@ -96,6 +96,20 @@ To get a Gmail App Password:
 4. Generate a new app password for "Mail"
 5. Use that password in `.env`
 
+### Deployment email checklist
+
+Your hosting provider does **not** automatically use the `.env` file on your computer. In the provider's Environment Variables / Secrets settings, add these exact values and redeploy:
+
+```
+EMAIL_ADDRESS=your-gmail-address@gmail.com
+EMAIL_APP_PASSWORD=your-16-character-gmail-app-password
+BASE_URL=https://your-public-domain.example
+DATABASE_URL=your-cockroachdb-connection-string
+JWT_SECRET=a-long-random-secret
+```
+
+Use a Gmail **App Password**, not your normal Gmail password. After deployment, open `/api/health`; `emailConfigured` must be `true`. The deployment log will also report either `Email service connection verified` or the exact SMTP/configuration error.
+
 ## Database
 
 All data is stored in CockroachDB (PostgreSQL-compatible). Configure the connection string in `.env`:

@@ -834,7 +834,7 @@ function renderAdminProductList() {
                 '<div class="thumb">' + imgHtml + "</div>" +
                 '<div class="info"><h4>' + p.name + '</h4><span class="cat">' + p.category + ' • Stock: ' + (p.stock || 0) + '</span></div>' +
                 '<div class="price">' + price(p.price) + "</div>" +
-                '<button class="delete-btn" onclick="confirmDeleteProduct(' + p.id + ')">🗑 Delete</button>';
+                '<button class="delete-btn" data-pid="' + p.id + '" onclick="confirmDeleteProduct(this.dataset.pid)">🗑 Delete</button>';
             container.appendChild(item);
         });
     }).catch(function (err) {
@@ -971,7 +971,7 @@ function loadWorkers() {
             item.innerHTML =
                 '<div class="avatar">' + initials + '</div>' +
                 '<div class="info"><h4>' + w.name + '</h4><p>' + w.email + '</p></div>' +
-                '<button class="delete-btn" onclick="deleteWorker(' + w.id + ')">🗑 Remove</button>';
+                '<button class="delete-btn" data-wid="' + w.id + '" onclick="deleteWorker(this.dataset.wid)">🗑 Remove</button>';
             container.appendChild(item);
         });
     }).catch(function (err) {

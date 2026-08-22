@@ -142,12 +142,12 @@ async function createTables() {
 }
 
 // ===== Collection helpers (async) =====
-// All helper functions that accept an `id` coerce it to a Number before
-// querying CockroachDB. Express route params (req.params.id) arrive as
-// strings, and CockroachDB does NOT implicitly cast a text parameter to
-// INTEGER the way vanilla PostgreSQL does — a string "5" compared against
-// an INT column silently returns zero rows, producing spurious "not found"
-// errors on GET /:id, PUT /:id, and DELETE /:id routes.
+// CRITICAL: CockroachDB row IDs are INT8 values that EXCEED JavaScript's
+// Number.MAX_SAFE_INTEGER (e.g. 1203603238813368321). node-postgres returns
+// them as strings; coercing to Number silently loses precision
+// (1203603238813368321 -> 1203603238813368300) so lookups return zero rows
+// ("order/product not found"). String() is exact for both small ints and
+// huge INT8 ids — always pass String(id) into queries.
 async function getAll(collection) {
     const table = collection;
     const result = await pool.query(`SELECT * FROM ${table} ORDER BY id`);
@@ -156,9 +156,8 @@ async function getAll(collection) {
 
 async function getById(collection, id) {
     const table = collection;
-    const numericId = Number(id);
-    if (Number.isNaN(numericId)) return null;
-    const result = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [numericId]);
+    // String(id): see the INT8 precision note above — never use Number(id).
+    const result = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [String(id)]);
     return result.rows[0] || null;
 }
 
@@ -189,19 +188,18 @@ async function update(collection, id, data) {
     const keys = Object.keys(data);
     const values = keys.map(k => data[k]);
     const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
-    const numericId = Number(id);
+    // String(id): see the INT8 precision note above — never use Number(id).
     const result = await pool.query(
         `UPDATE ${table} SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`,
-        [...values, Number.isNaN(numericId) ? id : numericId]
+        [...values, String(id)]
     );
     return result.rows[0] || null;
 }
 
 async function remove(collection, id) {
     const table = collection;
-    const numericId = Number(id);
-    if (Number.isNaN(numericId)) return false;
-    const result = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [numericId]);
+    // String(id): see the INT8 precision note above — never use Number(id).
+    const result = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [String(id)]);
     return result.rowCount > 0;
 }
 

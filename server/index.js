@@ -348,15 +348,17 @@ app.post('/api/login', async (req, res) => {
     try {
         const { email, password, loginCode } = req.body;
 
-        // Check if it's a worker login with code
+        // Check if it's a worker login with code.
+        // Codes are PERMANENT credentials — they are NOT consumed on login.
+        // (The old one-time-use design locked workers out forever after their
+        // first sign-in, forcing repeated row deletions and re-adds.)
         if (loginCode) {
-        const workerCode = await db.findBy('worker_codes', wc => wc.login_code === loginCode && Number(wc.is_used) === 0);
+            const normalizedCode = String(loginCode).trim().toUpperCase();
+            const workerCode = await db.findBy('worker_codes', wc =>
+                String(wc.login_code).trim().toUpperCase() === normalizedCode);
             if (!workerCode) {
                 return res.status(400).json({ error: 'Invalid login code' });
             }
-
-            // Mark code as used
-            await db.update('worker_codes', workerCode.id, { is_used: 1 });
 
             const user = await db.getById('users', workerCode.worker_id);
             if (!user || user.role !== 'worker') {

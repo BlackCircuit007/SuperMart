@@ -723,7 +723,7 @@ function renderWorkerProductList() {
                 '<div class="thumb">' + imgHtml + "</div>" +
                 '<div class="info"><h4>' + p.name + '</h4><span class="cat">' + p.category + ' • Stock: ' + (p.stock || 0) + '</span></div>' +
                 '<div class="price">' + price(p.price) + "</div>" +
-                '<button class="delete-btn" onclick="confirmWorkerDeleteProduct(' + p.id + ')">🗑 Delete</button>';
+                '<button class="delete-btn" data-pid="' + p.id + '" onclick="confirmWorkerDeleteProduct(this.dataset.pid)">🗑 Delete</button>';
             container.appendChild(item);
         });
     }).catch(function (err) {
@@ -843,7 +843,7 @@ function loadWorkerOrders() {
                 '<td>' + paymentBadge + ' <small>(' + (order.payment_status || 'pending') + ')</small></td>' +
                 '<td><span style="color:' + statusColor + ';font-weight:600;">' + statusBadge + '</span></td>' +
                 '<td>' + new Date(order.created_at).toLocaleDateString() + '</td>' +
-                '<td><button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" onclick="openWorkerOrderUpdate(' + order.id + ')">Update</button></td>';
+                '<td><button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" data-oid="' + order.id + '" onclick="openWorkerOrderUpdate(this.dataset.oid)">Update</button></td>';
             tbody.appendChild(tr);
         });
     }).catch(function (err) {

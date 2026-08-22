@@ -525,3 +525,50 @@ function initBackToTop() {
         link.addEventListener('click', function () { toggleMenu(false); });
     });
 })();
+
+// ===== PWA: one-click "Install app" (like YouTube / TikTok) =====
+// Registers the service worker and shows a floating Install button whenever
+// the browser allows installation. Once installed, the store opens in its
+// own window from the Start Menu / desktop — no browser bars.
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function () { /* offline shell unavailable — app still works online */ });
+    });
+}
+
+var deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    showInstallButton();
+});
+
+window.addEventListener('appinstalled', function () {
+    deferredInstallPrompt = null;
+    var btn = document.getElementById('pwa-install-btn');
+    if (btn) btn.remove();
+});
+
+function showInstallButton() {
+    if (document.getElementById('pwa-install-btn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'pwa-install-btn';
+    btn.type = 'button';
+    btn.innerHTML = '📲 Install App';
+    btn.title = 'Install LordTempsMart as an app';
+    btn.style.cssText =
+        'position:fixed;left:16px;bottom:24px;z-index:9999;' +
+        'background:#ff3b20;color:#fff;border:none;border-radius:26px;' +
+        'padding:12px 22px;font-weight:700;font-size:14px;cursor:pointer;' +
+        'box-shadow:0 4px 14px rgba(0,0,0,0.25);font-family:inherit;';
+    btn.onclick = function () {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.then(function () {
+            deferredInstallPrompt = null;
+            btn.remove();
+        });
+    };
+    document.body.appendChild(btn);
+}

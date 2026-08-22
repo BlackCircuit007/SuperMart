@@ -104,7 +104,8 @@ function createVerifyLinkToken(registration) {
 }
 
 function publicUrl(pathname) {
-    const baseUrl = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+    // Fallback chain: explicit BASE_URL -> Render auto-detected URL -> localhost dev
+    const baseUrl = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
     return baseUrl + pathname;
 }
 

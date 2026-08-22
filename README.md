@@ -82,32 +82,34 @@ http://localhost:3000
 
 ## Email Configuration
 
-The app uses EmailJS over HTTPS (not SMTP). Configure your EmailJS service, template, and public key in the deployment environment if you use a different EmailJS project:
+The app sends all transactional emails (verification codes, order confirmations, payment notices, worker credentials) via the **Brevo HTTP API** over outbound HTTPS — no SMTP ports and no EmailJS.
+
+Configure in your deployment environment:
 
 ```
-EMAILJS_SERVICE_ID=your_emailjs_service_id
-EMAILJS_TEMPLATE_ID=your_emailjs_template_id
-EMAILJS_PUBLIC_KEY=your_emailjs_public_key
+BREVO_API_KEY=your_brevo_api_key
+BREVO_SENDER_EMAIL=a-sender-verified-in-brevo@example.com
+BREVO_SENDER_NAME=LordTempsMart
 OWNER_EMAIL=your-owner-email@example.com
 ```
-
-The existing EmailJS project values are used by default, so these variables are only needed when changing EmailJS projects or owner email.
 
 ### Deployment email checklist
 
 Your hosting provider does **not** automatically use the `.env` file on your computer. In the provider's Environment Variables / Secrets settings, add these exact values and redeploy:
 
 ```
-EMAILJS_SERVICE_ID=your_emailjs_service_id
-EMAILJS_TEMPLATE_ID=your_emailjs_template_id
-EMAILJS_PUBLIC_KEY=your_emailjs_public_key
+BREVO_API_KEY=your_brevo_api_key
+BREVO_SENDER_EMAIL=a-sender-verified-in-brevo@example.com
+BREVO_SENDER_NAME=LordTempsMart
 OWNER_EMAIL=your-owner-email@example.com
 BASE_URL=https://your-public-domain.example
 DATABASE_URL=your-cockroachdb-connection-string
 JWT_SECRET=a-long-random-secret
 ```
 
-After deployment, open `/api/health`; `emailConfigured` must be `true`. The deployment log will report whether EmailJS configuration is available.
+> **Important:** `BASE_URL` must be your public deployed URL (e.g. `https://your-app.onrender.com`). All clickable links inside emails (verify & login magic links, payment verify/reject buttons) are built from it. If it is left unset, the app auto-detects on Render via `RENDER_EXTERNAL_URL`, then falls back to `http://localhost:PORT` for local development only.
+
+After deployment, open `/api/health`; `emailConfigured` must be `true`. The deployment log will report whether Brevo configuration is available.
 
 ## Database
 
@@ -130,7 +132,7 @@ Tables include:
 
 - **Backend**: Node.js, Express
 - **Database**: CockroachDB (PostgreSQL-compatible)
-- **Email**: EmailJS (HTTPS API)
+- **Email**: Brevo HTTP API (outbound HTTPS)
 - **Auth**: JWT (JSON Web Tokens)
 - **Frontend**: HTML5 / CSS3 / JavaScript (ES6)
 - **Security**: bcrypt password hashing

@@ -142,6 +142,12 @@ async function createTables() {
 }
 
 // ===== Collection helpers (async) =====
+// All helper functions that accept an `id` coerce it to a Number before
+// querying CockroachDB. Express route params (req.params.id) arrive as
+// strings, and CockroachDB does NOT implicitly cast a text parameter to
+// INTEGER the way vanilla PostgreSQL does — a string "5" compared against
+// an INT column silently returns zero rows, producing spurious "not found"
+// errors on GET /:id, PUT /:id, and DELETE /:id routes.
 async function getAll(collection) {
     const table = collection;
     const result = await pool.query(`SELECT * FROM ${table} ORDER BY id`);
@@ -150,7 +156,9 @@ async function getAll(collection) {
 
 async function getById(collection, id) {
     const table = collection;
-    const result = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id]);
+    const numericId = Number(id);
+    if (Number.isNaN(numericId)) return null;
+    const result = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [numericId]);
     return result.rows[0] || null;
 }
 
@@ -181,16 +189,19 @@ async function update(collection, id, data) {
     const keys = Object.keys(data);
     const values = keys.map(k => data[k]);
     const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+    const numericId = Number(id);
     const result = await pool.query(
         `UPDATE ${table} SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`,
-        [...values, id]
+        [...values, Number.isNaN(numericId) ? id : numericId]
     );
     return result.rows[0] || null;
 }
 
 async function remove(collection, id) {
     const table = collection;
-    const result = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    const numericId = Number(id);
+    if (Number.isNaN(numericId)) return false;
+    const result = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [numericId]);
     return result.rowCount > 0;
 }
 

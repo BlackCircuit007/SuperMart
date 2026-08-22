@@ -8,7 +8,9 @@ const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.OWNER_EMAIL || 'goodluckiyke2010@gmail.com';
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || STORE_NAME;
 const OWNER_EMAIL = process.env.OWNER_EMAIL || 'goodluckiyke2010@gmail.com';
-const BASE_URL = (process.env.BASE_URL || 'http://localhost').replace(/\/$/, '');
+const PORT = process.env.PORT || 3000;
+// Fallback chain: explicit BASE_URL → Render auto-detected URL → localhost dev
+const BASE_URL = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 
 function isEmailConfigured() {
     return Boolean(BREVO_API_KEY);

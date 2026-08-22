@@ -1,11 +1,17 @@
 {
-  "name": "LordTempsmart",
+  "name": "lordtempsmart",
   "version": "1.0.0",
   "description": "LordTempsMart - Skin Care & Provisions Store with real database backend",
-  "main": "server/index.js",
+  "main": "electron/main.js",
+  "author": "LordTempsMart",
+  "license": "MIT",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "nodemon server/index.js"
+    "dev": "nodemon server/index.js",
+    "desktop": "electron .",
+    "icons": "node generate-icons.js",
+    "dist": "electron-builder --win nsis",
+    "dist:dir": "electron-builder --dir"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -16,6 +22,49 @@
     "pg": "^8.23.0"
   },
   "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "nodemon": "^3.0.1"
+  },
+  "build": {
+    "appId": "com.lordtempsmart.store",
+    "productName": "LordTempsMart",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "server/**/*",
+      "frontend/**/*",
+      "build/icon.*",
+      ".env",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LordTempsMart",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    }
   }
 }

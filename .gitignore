@@ -14,3 +14,11 @@ logs/
 .DS_Store
 Thumbs.db
 *.swp
+
+# ===== Electron build output =====
+dist/
+release/
+build/*.exe
+build/*.blockmap
+build/*.yml
+*.log

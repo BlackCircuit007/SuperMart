@@ -5,9 +5,11 @@
  * ============================================================ */
 
 const API_BASE = window.TRIUMPHSMART_API_BASE ||
-    ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000'
-        ? 'http://localhost:3000'
-        : window.location.origin);
+    ((window.LordTempsDesktop && window.LordTempsDesktop.isDesktop)
+        ? window.location.origin
+        : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '3000'
+            ? 'http://localhost:3000'
+            : window.location.origin));
 
 // ===== Token Management =====
 function getToken() {
@@ -572,3 +574,29 @@ function showInstallButton() {
     };
     document.body.appendChild(btn);
 }
+
+// ===== Desktop (Electron) update button =====
+// When running inside the packaged desktop app, the Electron main process
+// checks GitHub Releases and pushes an "update-available" event here. We show
+// a floating "⬆️ Update Available" button that opens the release page so the
+// user can download the new installer.
+(function setupDesktopUpdate() {
+    if (!window.LordTempsDesktop || !window.LordTempsDesktop.isDesktop) return;
+    window.LordTempsDesktop.onUpdateAvailable(function (info) {
+        if (document.getElementById('desktop-update-btn')) return;
+        var btn = document.createElement('button');
+        btn.id = 'desktop-update-btn';
+        btn.type = 'button';
+        btn.innerHTML = '⬆️ Update Available (v' + (info.version || '') + ')';
+        btn.title = 'A new version of LordTempsMart is available';
+        btn.style.cssText =
+            'position:fixed;right:16px;bottom:24px;z-index:9999;' +
+            'background:#2563eb;color:#fff;border:none;border-radius:26px;' +
+            'padding:12px 22px;font-weight:700;font-size:14px;cursor:pointer;' +
+            'box-shadow:0 4px 14px rgba(0,0,0,0.25);font-family:inherit;';
+        btn.onclick = function () {
+            if (info.url) window.LordTempsDesktop.openExternal(info.url);
+        };
+        document.body.appendChild(btn);
+    });
+})();

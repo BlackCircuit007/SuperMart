@@ -9,7 +9,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'triumphmart_super_secret_key_2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'LordTempmart_super_secret_key_2026';
 
 // Middleware
 app.use(cors());
@@ -1056,7 +1056,7 @@ app.post('/api/test-email', async (req, res) => {
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        message: 'TriumphsMart API is running',
+        message: 'LordTempsMart API is running',
         emailConfigured: emailService.isEmailConfigured(),
         emailConfig: emailService.getEmailConfig()
     });
@@ -1074,7 +1074,7 @@ db.init().then(() => {
         .then(() => console.log('Email service connection verified'))
         .catch(err => console.error('Email service is unavailable:', err.message));
     app.listen(PORT, () => {
-        console.log(`🚀 TriumphsMart server running on http://localhost:${PORT}`);
+        console.log(`🚀 LordTempsMart server running on http://localhost:${PORT}`);
         console.log(`📊 API available at http://localhost:${PORT}/api`);
         console.log(`️ Frontend available at http://localhost:${PORT}`);
     });

@@ -1,7 +1,7 @@
 {
-  "name": "triumphsmart",
+  "name": "LordTempsmart",
   "version": "1.0.0",
-  "description": "TriumphsMart - Skin Care & Provisions Store with real database backend",
+  "description": "LordTempsMart - Skin Care & Provisions Store with real database backend",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",

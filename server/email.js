@@ -2,7 +2,7 @@
 // Works from Render because it uses outbound HTTPS (port 443).
 require('dotenv').config();
 
-const STORE_NAME = 'TriumphsMart';
+const STORE_NAME = 'LordTempsMart';
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || process.env.OWNER_EMAIL || 'goodluckiyke2010@gmail.com';

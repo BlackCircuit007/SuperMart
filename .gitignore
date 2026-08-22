@@ -1,0 +1,16 @@
+# ===== Environment / secrets (NEVER commit these) =====
+.env
+.env.*
+!.env.example
+
+# ===== Dependencies =====
+node_modules/
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== OS / editor =====
+.DS_Store
+Thumbs.db
+*.swp

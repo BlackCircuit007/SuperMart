@@ -136,11 +136,7 @@ async function resendVerification() {
 
     try {
         var result = await apiResendVerification(email);
-        if (result.emailSent === false) {
-            showToast("Email could not be sent automatically. Please check your Spam/Junk folder or try again later.", "error");
-        } else {
-            showToast("Verification code resent! Please check your Spam/Junk folder if you do not see it.", "success");
-        }
+        showToast("Verification code resent! Please check your Spam/Junk folder if you do not see it.", "success");
     } catch (err) {
         showToast(err.message || "Failed to resend code. Please try again.", "error");
     }

@@ -82,33 +82,32 @@ http://localhost:3000
 
 ## Email Configuration
 
-The app uses Nodemailer with Gmail SMTP. Configure in `.env`:
+The app uses EmailJS over HTTPS (not SMTP). Configure your EmailJS service, template, and public key in the deployment environment if you use a different EmailJS project:
 
 ```
-EMAIL_ADDRESS=your-email@gmail.com
-EMAIL_APP_PASSWORD=your-gmail-app-password
+EMAILJS_SERVICE_ID=your_emailjs_service_id
+EMAILJS_TEMPLATE_ID=your_emailjs_template_id
+EMAILJS_PUBLIC_KEY=your_emailjs_public_key
+OWNER_EMAIL=your-owner-email@example.com
 ```
 
-To get a Gmail App Password:
-1. Go to https://myaccount.google.com/security
-2. Enable 2-Step Verification
-3. Go to App Passwords
-4. Generate a new app password for "Mail"
-5. Use that password in `.env`
+The existing EmailJS project values are used by default, so these variables are only needed when changing EmailJS projects or owner email.
 
 ### Deployment email checklist
 
 Your hosting provider does **not** automatically use the `.env` file on your computer. In the provider's Environment Variables / Secrets settings, add these exact values and redeploy:
 
 ```
-EMAIL_ADDRESS=your-gmail-address@gmail.com
-EMAIL_APP_PASSWORD=your-16-character-gmail-app-password
+EMAILJS_SERVICE_ID=your_emailjs_service_id
+EMAILJS_TEMPLATE_ID=your_emailjs_template_id
+EMAILJS_PUBLIC_KEY=your_emailjs_public_key
+OWNER_EMAIL=your-owner-email@example.com
 BASE_URL=https://your-public-domain.example
 DATABASE_URL=your-cockroachdb-connection-string
 JWT_SECRET=a-long-random-secret
 ```
 
-Use a Gmail **App Password**, not your normal Gmail password. After deployment, open `/api/health`; `emailConfigured` must be `true`. The deployment log will also report either `Email service connection verified` or the exact SMTP/configuration error.
+After deployment, open `/api/health`; `emailConfigured` must be `true`. The deployment log will report whether EmailJS configuration is available.
 
 ## Database
 
@@ -131,7 +130,7 @@ Tables include:
 
 - **Backend**: Node.js, Express
 - **Database**: CockroachDB (PostgreSQL-compatible)
-- **Email**: Nodemailer (Gmail SMTP)
+- **Email**: EmailJS (HTTPS API)
 - **Auth**: JWT (JSON Web Tokens)
 - **Frontend**: HTML5 / CSS3 / JavaScript (ES6)
 - **Security**: bcrypt password hashing

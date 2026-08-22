@@ -83,6 +83,18 @@ async function createTables() {
             )
         `);
 
+        // A buyer is held here only until their email code is confirmed.
+        // No users row is created before verification succeeds.
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS pending_registrations (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        `);
+
         // Worker codes table
         await client.query(`
             CREATE TABLE IF NOT EXISTS worker_codes (

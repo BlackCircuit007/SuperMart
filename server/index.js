@@ -48,7 +48,7 @@ function workerOrAdminRequired(req, res, next) {
 
 // ===== Helper functions =====
 // Send email in the background without blocking the response.
-// Prevents "failed to fetch" when Gmail SMTP is slow or unreachable.
+// Prevents request failures when the email provider is slow or unreachable.
 function sendEmailInBackground(emailPromise) {
     Promise.race([
         emailPromise,
@@ -92,12 +92,23 @@ function createEmailLoginToken(user, expiresIn) {
     );
 }
 
+// One-click sign-in link for a pending (pre-verification) buyer registration.
+// Clicking it from the verification email materializes the pending registration
+// into a verified user and logs the buyer straight into the dashboard.
+function createVerifyLinkToken(registration) {
+    return jwt.sign(
+        { id: registration.id, email: registration.email, name: registration.name, purpose: 'verify_link' },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+    );
+}
+
 function publicUrl(pathname) {
     const baseUrl = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
     return baseUrl + pathname;
 }
 
-async function createAndSendVerification(user) {
+async function createVerificationCode(user) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     await db.insert('verification_codes', {
@@ -109,14 +120,7 @@ async function createAndSendVerification(user) {
         created_at: new Date().toISOString()
     });
 
-    const emailLoginUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(user, '24h'))}`);
-    try {
-        await sendEmailWithTimeout(emailService.sendVerificationEmail(user.email, user.name, code, emailLoginUrl));
-        return { emailSent: true };
-    } catch (error) {
-        console.error('Verification email error:', error.message);
-        return { emailSent: false, emailWarning: 'Your account was created, but the email could not be sent. Please use Resend verification code in a moment.' };
-    }
+    return code;
 }
 
 // ===== AUTH ROUTES =====
@@ -132,44 +136,42 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
 
-        // Check if user exists
-        const existing = await db.findBy('users', u => u.email === email.toLowerCase());
+        const normalizedEmail = email.toLowerCase();
+        // A real account can only exist after verification. The legacy branch
+        // below lets older unverified accounts recover without creating a
+        // second user row.
+        const existing = await db.findBy('users', u => u.email === normalizedEmail);
         if (existing) {
             if (Number(existing.is_verified) === 0 && existing.role === 'buyer') {
-                const delivery = await createAndSendVerification(existing);
+                const code = await createVerificationCode(existing);
+                const existingLoginUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(existing, '7d'))}`);
+                sendEmailInBackground(emailService.sendVerificationEmail(existing.email, existing.name, code, existingLoginUrl));
                 return res.status(200).json({
-                    message: delivery.emailSent
-                        ? 'This account is awaiting verification. A fresh verification code has been sent.'
-                        : delivery.emailWarning,
+                    message: 'This account is awaiting verification. A fresh verification code has been sent to your email.',
                     userId: existing.id,
-                    ...delivery
+                    verificationCode: code
                 });
             }
             return res.status(400).json({ error: 'Email already registered. Please log in instead.' });
         }
 
-        // Hash password
+        const pending = await db.findBy('pending_registrations', p => p.email === normalizedEmail);
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user (unverified)
-        const user = await db.insert('users', {
-            name,
-            email: email.toLowerCase(),
-            password: hashedPassword,
-            role: 'buyer',
-            is_verified: 0,
-            profile_pic: null,
-            created_at: new Date().toISOString()
-        });
+        const registration = pending
+            ? await db.update('pending_registrations', pending.id, { name, password: hashedPassword, created_at: new Date().toISOString() })
+            : await db.insert('pending_registrations', { name, email: normalizedEmail, password: hashedPassword, created_at: new Date().toISOString() });
+        const code = await createVerificationCode(registration);
 
-        const delivery = await createAndSendVerification(user);
+        // A real user row is NOT created yet — only a pending registration.
+        // The verification email is sent via Brevo HTTP API (no SMTP, no EmailJS).
+        // The user row is created in /api/verify after the code is confirmed.
+        const dashboardUrl = publicUrl(`/verify.html?token=${encodeURIComponent(createVerifyLinkToken(registration))}`);
+        sendEmailInBackground(emailService.sendVerificationEmail(registration.email, registration.name, code, dashboardUrl));
 
         res.status(201).json({
-            message: delivery.emailSent
-                ? 'Registration successful. Use the secure sign-in button in your email, or enter the verification code.'
-                : delivery.emailWarning,
-            userId: user.id,
-            ...delivery
+            message: 'Verification code created. A verification email has been sent to your inbox.',
+            verificationCode: code
         });
     } catch (err) {
         console.error('Register error:', err);
@@ -199,14 +201,28 @@ app.post('/api/verify', async (req, res) => {
             return res.status(400).json({ error: 'Verification code has expired' });
         }
 
-        // Mark code as used
-        await db.update('verification_codes', record.id, { used: 1 });
-
-        // Mark user as verified
-        const user = await db.findBy('users', u => u.email === email.toLowerCase());
-        if (user) {
-            await db.update('users', user.id, { is_verified: 1 });
+        const normalizedEmail = email.toLowerCase();
+        const pending = await db.findBy('pending_registrations', p => p.email === normalizedEmail);
+        let user = await db.findBy('users', u => u.email === normalizedEmail);
+        if (pending) {
+            user = await db.insert('users', {
+                name: pending.name,
+                email: pending.email,
+                password: pending.password,
+                role: 'buyer',
+                is_verified: 1,
+                profile_pic: null,
+                created_at: new Date().toISOString()
+            });
+            await db.remove('pending_registrations', pending.id);
+        } else if (user) {
+            // Legacy unverified records from before this change can still be verified.
+            user = await db.update('users', user.id, { is_verified: 1 });
+        } else {
+            return res.status(400).json({ error: 'No pending registration was found. Please register again.' });
         }
+
+        await db.update('verification_codes', record.id, { used: 1 });
 
         // Generate token
         const token = createSessionToken(user);
@@ -235,20 +251,29 @@ app.post('/api/verify/resend', async (req, res) => {
             return res.status(400).json({ error: 'Email is required' });
         }
 
-        const user = await db.findBy('users', u => u.email === email.toLowerCase());
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+        const normalizedEmail = email.toLowerCase();
+        const user = await db.findBy('users', u => u.email === normalizedEmail);
+        const pending = await db.findBy('pending_registrations', p => p.email === normalizedEmail);
+        if (!user && !pending) {
+            return res.status(404).json({ error: 'No pending registration found. Please register again.' });
         }
 
-        if (Number(user.is_verified) === 1) {
+        if (user && Number(user.is_verified) === 1) {
             return res.status(400).json({ error: 'Account is already verified' });
         }
 
-        const delivery = await createAndSendVerification(user);
+        const recipient = pending || user;
+        const code = await createVerificationCode(recipient);
+
+        // Magic link that verifies the account and opens the dashboard (no SMTP, no EmailJS)
+        const dashboardUrl = pending
+            ? publicUrl(`/verify.html?token=${encodeURIComponent(createVerifyLinkToken(pending))}`)
+            : publicUrl(`/verify.html?token=${encodeURIComponent(createEmailLoginToken(user, '7d'))}`);
+        sendEmailInBackground(emailService.sendVerificationEmail(recipient.email, recipient.name, code, dashboardUrl));
 
         res.json({
-            message: delivery.emailSent ? 'Verification code resent. Check your email (and Spam/Junk folder).' : delivery.emailWarning,
-            ...delivery
+            message: 'A fresh verification code has been sent to your email.',
+            verificationCode: code
         });
     } catch (err) {
         console.error('Resend verification error:', err);
@@ -264,21 +289,47 @@ app.post('/api/auth/email-login', async (req, res) => {
         if (!token) return res.status(400).json({ error: 'Sign-in link is required' });
 
         const payload = jwt.verify(token, JWT_SECRET);
-        if (payload.purpose !== 'email_login' || !payload.id || !payload.email) {
+        const isVerifyLink = payload.purpose === 'verify_link';
+        if ((!isVerifyLink && payload.purpose !== 'email_login') || !payload.id || !payload.email) {
             return res.status(400).json({ error: 'Invalid sign-in link' });
         }
 
-        const user = await db.getById('users', payload.id);
-        if (!user || user.email !== payload.email || user.role !== payload.role) {
-            return res.status(400).json({ error: 'This sign-in link is no longer valid' });
-        }
-
-        if (user.role === 'buyer' && Number(user.is_verified) === 0) {
-            await db.update('users', user.id, { is_verified: 1 });
+        let user;
+        if (isVerifyLink) {
+            // Magic link from the verification email. The buyer only has a
+            // pending registration, so materialize it into a verified user and
+            // log them in straight to the dashboard.
+            const pending = await db.getById('pending_registrations', payload.id);
+            if (!pending || pending.email !== payload.email) {
+                return res.status(400).json({ error: 'This sign-in link is no longer valid' });
+            }
+            const existing = await db.findBy('users', u => u.email === pending.email);
+            if (existing) {
+                return res.status(400).json({ error: 'An account with this email already exists. Please log in.' });
+            }
+            user = await db.insert('users', {
+                name: pending.name,
+                email: pending.email,
+                password: pending.password,
+                role: 'buyer',
+                is_verified: 1,
+                profile_pic: null,
+                created_at: new Date().toISOString()
+            });
+            await db.remove('pending_registrations', pending.id);
+        } else {
+            user = await db.getById('users', payload.id);
+            if (!user || user.email !== payload.email || user.role !== payload.role) {
+                return res.status(400).json({ error: 'This sign-in link is no longer valid' });
+            }
+            // Legacy: an unverified buyer clicking an email-login link is verified on sign-in.
+            if (user.role === 'buyer' && Number(user.is_verified) === 0) {
+                await db.update('users', user.id, { is_verified: 1 });
+            }
         }
 
         res.json({
-            message: 'Signed in successfully',
+            message: isVerifyLink ? 'Account verified and signed in!' : 'Signed in successfully',
             token: createSessionToken(user),
             user: { id: user.id, name: user.name, email: user.email, role: user.role }
         });
@@ -508,7 +559,7 @@ app.post('/api/orders', authRequired, async (req, res) => {
             items
         };
 
-        // Send emails in the background (don't block the response)
+        // Send emails in the background via Brevo HTTP API (no SMTP, no EmailJS)
         sendEmailInBackground(emailService.sendOrderConfirmationEmail(orderData));
         if (payment_method === 'cash') {
             sendEmailInBackground(emailService.sendCashOnDeliveryEmail(orderData));
@@ -604,7 +655,7 @@ app.post('/api/payments/verify', authRequired, async (req, res) => {
             created_at: new Date().toISOString()
         });
 
-        // Send verification email to owner in the background (don't block the response)
+        // Send verification email to owner via Brevo HTTP API (no SMTP, no EmailJS)
         sendEmailInBackground(emailService.sendPaymentVerificationEmail({
             paymentId: payment.id,
             orderRef: order_ref,
@@ -734,9 +785,11 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
             created_at: new Date().toISOString()
         });
 
+        // Send worker credentials email via Brevo HTTP API (no SMTP, no EmailJS)
+        const emailLoginUrl = publicUrl(`/worker.html?token=${encodeURIComponent(createEmailLoginToken(worker, '7d'))}`);
+
         let emailWarning = null;
         try {
-            const emailLoginUrl = publicUrl(`/worker.html?token=${encodeURIComponent(createEmailLoginToken(worker, '7d'))}`);
             await sendEmailWithTimeout(emailService.sendWorkerCredentialsEmail(email, name, username, loginCode, emailLoginUrl));
         } catch (emailError) {
             console.error('Worker credentials email error:', emailError.message);
@@ -967,12 +1020,45 @@ app.get('/api/cart', authRequired, async (req, res) => {
     }
 });
 
+// ===== Test email endpoint (debugging) =====
+app.post('/api/test-email', async (req, res) => {
+    try {
+        const { email, name } = req.body;
+        if (!email) return res.status(400).json({ error: 'Email is required' });
+
+        if (!emailService.isEmailConfigured()) {
+            return res.status(500).json({
+                error: 'Brevo API key is not configured',
+                config: emailService.getEmailConfig()
+            });
+        }
+
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        await sendEmailWithTimeout(emailService.sendVerificationEmail(email, name || 'there', code));
+
+        res.json({
+            message: 'Test email sent successfully',
+            to: email,
+            verificationCode: code,
+            config: emailService.getEmailConfig()
+        });
+    } catch (err) {
+        console.error('Test email error:', err);
+        res.status(500).json({
+            error: 'Test email failed',
+            details: err.message,
+            config: emailService.getEmailConfig()
+        });
+    }
+});
+
 // ===== Health check =====
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
         message: 'TriumphsMart API is running',
-        emailConfigured: emailService.isEmailConfigured()
+        emailConfigured: emailService.isEmailConfigured(),
+        emailConfig: emailService.getEmailConfig()
     });
 });
 

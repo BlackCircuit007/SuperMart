@@ -122,7 +122,8 @@ async function registerUser() {
 
     try {
         var result = await apiRegister(name, email, password);
-        // Store email for the verify page
+        // Store email for the verify page. The verification email is sent
+        // from the backend via Brevo HTTP API (no SMTP, no EmailJS).
         localStorage.setItem("pending_verify_email", email);
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Create Account"; }
         showToast("Verification code sent! Please also check your Spam/Junk folder if you do not see it.", "success");

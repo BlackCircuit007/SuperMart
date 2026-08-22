@@ -299,25 +299,35 @@ function updateAuthUI() {
     if (user) {
         if (authAction) authAction.style.display = 'none';
         if (signupBtn) signupBtn.style.display = 'none';
+        // Role-aware home link: admins return to the admin panel, workers to
+        // the worker portal, buyers to their dashboard.
+        var dashHref = 'dashboard.html';
+        if (user.role === 'worker') dashHref = 'worker.html';
+        else if (user.role === 'admin') dashHref = 'admin.html';
         if (mobileLoginLink) {
-            // Workers link to worker.html, customers link to dashboard.html
-            var dashHref = user.role === 'worker' ? 'worker.html' : 'dashboard.html';
             mobileLoginLink.href = dashHref;
             mobileLoginLink.textContent = 'My Dashboard';
         }
+        // admin.html and worker.html render their own dedicated logout button
+        // in the navbar — injecting a second one here caused duplicate Logout
+        // buttons, so only inject logout on pages without one.
+        var hasOwnLogout = !!(document.getElementById('adminLogoutBtn') || document.getElementById('workerLogoutBtn'));
         if (navActions) {
             const div = document.createElement('div');
             div.id = 'profileContainer';
             div.style.cssText = 'display:inline-flex;align-items:center;gap:6px;';
             const initials = (user.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-            var profileHref = user.role === 'worker' ? 'worker.html' : 'dashboard.html';
+            var profileLabel = user.role === 'admin' ? 'Admin' : (user.name || 'User').split(' ')[0];
+            var profileIcon = user.role === 'admin' ? '🛠️' : '👤';
             div.innerHTML =
-                '<a href="' + profileHref + '" class="nav-action">' +
-                '<span class="action-icon">👤</span>' +
-                '<span>' + (user.name || 'User').split(' ')[0] + '</span>' +
+                '<a href="' + dashHref + '" class="nav-action" title="' +
+                (user.role === 'admin' ? 'Back to Admin Panel' : 'My Dashboard') + '">' +
+                '<span class="action-icon">' + profileIcon + '</span>' +
+                '<span>' + profileLabel + '</span>' +
                 '</a>' +
-                '<a href="#" onclick="logout();return false;" class="nav-action" title="Logout">' +
-                '<span class="action-icon">🚪</span><span>Logout</span></a>';
+                (hasOwnLogout ? '' :
+                    '<a href="#" onclick="logout();return false;" class="nav-action" title="Logout">' +
+                    '<span class="action-icon">🚪</span><span>Logout</span></a>');
             navActions.insertBefore(div, navActions.firstChild);
         }
     } else {

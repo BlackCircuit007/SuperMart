@@ -30,6 +30,12 @@ function getEmailConfig() {
 /* ===== Core API call ===== */
 async function sendEmailViaBrevo(toEmail, toName, subject, htmlContent) {
     if (!isEmailConfigured()) throw new Error('Brevo API key is not configured');
+    // Guard against invalid recipients (e.g. the seeded admin account uses the
+    // username "admin" as its email). Brevo rejects these with a 400 and the
+    // background logger spams errors — fail fast with a clear message instead.
+    if (!toEmail || String(toEmail).indexOf('@') === -1) {
+        throw new Error('Skipping email — invalid recipient address: ' + toEmail);
+    }
     const response = await fetch(BREVO_URL, {
         method: 'POST',
         headers: {

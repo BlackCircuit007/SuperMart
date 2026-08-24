@@ -102,6 +102,10 @@
                             <input type="radio" name="payment" id="card" value="transfer">
                             <button type="button" class="pay-label" id="becomePayerBtn" style="background:none;border:none;color:inherit;padding:0;cursor:pointer;width:100%;">Transfer</button>
                         </label>
+                        <label class="payment-option" for="flw-card">
+                            <input type="radio" name="payment" id="flw-card" value="flutterwave">
+                            <span class="pay-label">Card / Online (Flutterwave)</span>
+                        </label>
                     </div>
 
                     <!-- Transaction Panel (Payment Verification Modal) -->
@@ -151,6 +155,7 @@
         </div>
     </footer>
 
+    <script src="https://checkout.flutterwave.com/v3.js"></script>
     <script src="js/api.js"></script>
     <script src="js/data.js"></script>
     <script src="js/main.js"></script>
@@ -255,11 +260,67 @@
                     updateCartCount();
 
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+
+                    // Flutterwave: order exists (stock reserved); now take payment.
+                    if (paymentMethod === "flutterwave") {
+                        startFlutterwaveCheckout(result.orderRef, name, email, phone, submitBtn);
+                        return;
+                    }
+
                     showToast("Order placed successfully!", "success");
                     window.location.href = "finally.html?ref=" + encodeURIComponent(result.orderRef) + "&payment=cash";
                 } catch (err) {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
                     showToast(err.message || "Failed to place order", "error");
+                }
+            }
+
+            // ---- Flutterwave inline checkout (official v3.js) ----
+            // Amount/keys come from OUR backend; the browser never dictates them.
+            async function startFlutterwaveCheckout(orderRef, name, email, phone, submitBtn) {
+                try {
+                    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Opening secure payment..."; }
+                    var init = await apiRequest('/api/payments/flutterwave/initialize', {
+                        method: 'POST',
+                        body: JSON.stringify({ order_ref: orderRef })
+                    });
+
+                    FlutterwaveCheckout({
+                        public_key: init.public_key,
+                        tx_ref: init.tx_ref,
+                        amount: init.amount,
+                        currency: init.currency,
+                        country: "NG",
+                        payment_options: "card,banktransfer,ussd",
+                        customer: { email: email, phone_number: phone, name: name },
+                        customizations: { title: "LordTempsMart", description: "Online order payment" },
+                        callback: async function (data) {
+                            try {
+                                var v = await apiRequest('/api/payments/flutterwave/verify', {
+                                    method: 'POST',
+                                    body: JSON.stringify({
+                                        transaction_id: data.transaction_id,
+                                        order_ref: orderRef
+                                    })
+                                });
+                                showToast("Payment status: " + v.payment_status.toUpperCase(), v.payment_status === 'verified' ? 'success' : 'error');
+                                window.location.href = "finally.html?ref=" + encodeURIComponent(orderRef) + "&payment=flutterwave";
+                            } catch (err) {
+                                // Verification hiccup — the webhook will still confirm.
+                                showToast(err.message || "Payment received — confirming shortly.", "error");
+                                window.location.href = "finally.html?ref=" + encodeURIComponent(orderRef) + "&payment=flutterwave";
+                            }
+                        },
+                        onclose: function () {
+                            // Customer closed the modal — order stays PENDING and the
+                            // webhook/manual verification can still resolve it.
+                            showToast("Payment window closed. Your order is saved as PENDING.", "error");
+                            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+                        }
+                    });
+                } catch (err) {
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
+                    showToast(err.message || "Could not start the payment. Your order is saved as PENDING.", "error");
                 }
             }
 

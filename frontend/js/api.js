@@ -251,6 +251,18 @@ async function apiGetAdminStats() {
     return apiRequest('/api/admin/stats');
 }
 
+// ===== Inventory API (staff dashboard + physical sales) =====
+async function apiGetInventory() {
+    return apiRequest('/api/admin/inventory');
+}
+async function apiRecordPhysicalSale(payload) {
+    return apiRequest('/api/admin/inventory/physical-sales', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    });
+}
+
+// ===== Cart API =====
 // ===== Cart API =====
 async function apiSaveCart(items) {
     const normalizedItems = (items || []).map(function (item) {
@@ -371,6 +383,14 @@ async function addToCart(id) {
     try {
         const product = await apiGetProduct(id);
         if (!product) { showToast('Product not found', 'error'); return false; }
+
+        // Backend is the final authority, but give clear feedback at the button
+        // too. A product with zero inventory cannot be added to the cart.
+        var inStock = product.in_stock !== undefined ? !!product.in_stock : Number(product.stock) > 0;
+        if (!inStock) {
+            showToast('This product is currently out of stock', 'error');
+            return false;
+        }
 
         const cart = await getCartItems();
         const existingItem = cart.find(item => String(item.id) === String(id));
@@ -599,4 +619,71 @@ function showInstallButton() {
         };
         document.body.appendChild(btn);
     });
+})();
+// ===== Live inventory stream (Phase 4 #17/#18) ===============================
+// SSE keeps the CUSTOMER catalog and WORKER dashboard up to date without page
+// reloads. It only updates the UI — the backend remains the sole authority on
+// stock when an order is actually placed (#18).
+function applyLiveStockUpdate(productId, product) {
+    if (!product) return;
+    var card = document.querySelector('.card[data-id="' + productId + '"]');
+    if (!card) return;
+
+    // Patch ONLY the existing badge/button nodes — card layout is untouched.
+    var body = card.querySelector('.card-body');
+    var badge = body ? body.querySelector('.stock-badge') : null;
+    if (badge && window.stockBadgeHtml) {
+        var temp = document.createElement('span');
+        temp.innerHTML = window.stockBadgeHtml(product);
+        var fresh = temp.firstChild;
+        if (fresh) badge.replaceWith(fresh);
+    }
+
+    var btn = card.querySelector('.card-actions .add-cart-btn');
+    if (btn && window.addCartButtonHtml) {
+        var tmp2 = document.createElement('span');
+        tmp2.innerHTML = window.addCartButtonHtml(product, JSON.stringify(String(productId)));
+        var freshBtn = tmp2.firstChild;
+        if (freshBtn) btn.replaceWith(freshBtn);
+    }
+}
+
+async function refreshProductCard(productId) {
+    try {
+        var data = await apiRequest('/api/products/' + productId);
+        applyLiveStockUpdate(productId, data.product);
+    } catch (e) { /* product may have been removed; ignore */ }
+}
+
+(function startInventoryStream() {
+    if (typeof EventSource === 'undefined') return;
+    var user = null;
+    try { user = getCurrentUser(); } catch (e) {}
+    var url = API_BASE + '/api/stream';
+    // Staff streams are scoped to their supermarket via their JWT.
+    if (user && getToken()) url += '?token=' + encodeURIComponent(getToken());
+
+    var source = new EventSource(url);
+
+    source.addEventListener('product_out_of_stock', function (e) {
+        try {
+            var d = JSON.parse(e.data);
+            refreshProductCard(d.productId);
+        } catch (err) {}
+    });
+    source.addEventListener('stock_changed', function (e) {
+        try {
+            var d = JSON.parse(e.data);
+            refreshProductCard(d.productId);
+        } catch (err) {}
+    });
+    source.addEventListener('product_back_in_stock', function (e) {
+        try {
+            var d = JSON.parse(e.data);
+            refreshProductCard(d.productId);
+        } catch (err) {}
+    });
+
+    // Expose for worker dashboard notifications.
+    window.LordTempsInventoryStream = source;
 })();

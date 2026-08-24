@@ -71,6 +71,26 @@ function ratingStars(r) {
     return out;
 }
 
+// Stock availability badge — reads the inventory-derived fields (p.in_stock,
+// p.stock_available, p.low_stock) with a fallback to the legacy p.stock mirror.
+function stockBadgeHtml(p) {
+    var inStock = p.in_stock !== undefined ? !!p.in_stock : Number(p.stock) > 0;
+    var qty = Number(p.stock_available !== undefined ? p.stock_available : p.stock) || 0;
+    var low = !!p.low_stock && inStock;
+    if (!inStock) return '<span class="stock-badge out">Out of Stock</span>';
+    return '<span class="stock-badge ' + (low ? 'low' : 'in') + '">' +
+        (low ? "Low Stock" : "In Stock") +
+        (qty > 0 && qty <= 5 ? ' — ' + qty + ' left' : '') + '</span>';
+}
+
+// Add-to-cart button — disabled and relabelled when the product is out of stock.
+function addCartButtonHtml(p, productId) {
+    var inStock = p.in_stock !== undefined ? !!p.in_stock : Number(p.stock) > 0;
+    if (!inStock) {
+        return '<button type="button" class="add-cart-btn" disabled title="This product is currently out of stock">Out of Stock</button>';
+    }
+    return '<button type="button" class="add-cart-btn" data-product-action="add-cart" data-product-id=' + productId + '>Add to Cart</button>';
+}
 function productCardHtml(p) {
     var productId = JSON.stringify(String(p.id));
     var imgHtml = p.image && (String(p.image).indexOf("data:") === 0 || String(p.image).indexOf("http") === 0)
@@ -85,6 +105,7 @@ function productCardHtml(p) {
         "</div>" +
         '<div class="card-body">' +
         '<span class="card-category">' + p.category + "</span>" +
+        stockBadgeHtml(p) +
         "<h3>" + p.name + "</h3>" +
         "<p>" + p.description + "</p>" +
         '<div class="card-meta">' +
@@ -92,9 +113,8 @@ function productCardHtml(p) {
         "</div>" +
         '<div class="price-row"><span class="price">' + price(p.price) + "</span></div>" +
         '<div class="card-actions">' +
-        '<button type="button" class="add-cart-btn" data-product-action="add-cart" data-product-id=' + productId + '>Add to Cart</button>' +
+        addCartButtonHtml(p, productId) +
         '<button type="button" class="quickview-btn" data-product-action="quick-view" data-product-id=' + productId + '>Quick View</button>' +
-        "</div>" +
         "</div>" +
         "</div>"
     );

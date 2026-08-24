@@ -88,6 +88,10 @@ window.addEventListener("DOMContentLoaded", function () {
             if (!order) return;
             if (order.payment_method === "cash") {
                 statusEl.textContent = "Cash on delivery: you will pay when the order arrives. Delivery: " + ((Number(order.delivered) === 1 || order.status === "delivered") ? "Delivered" : "Not delivered yet") + ".";
+            } else if (order.payment_method === "flutterwave") {
+                var payState = order.payment_status === "verified" ? "PAID ✅"
+                    : (order.payment_status === "failed" ? "FAILED ❌" : "PENDING ⏳");
+                statusEl.textContent = "Payment (" + payState + "). Delivery: " + ((Number(order.delivered) === 1 || order.status === "delivered") ? "Delivered" : "Not delivered yet") + ". This page refreshes automatically.";
             } else {
                 statusEl.textContent = "Payment: " + (order.payment_status === "verified" ? "Paid" : "Awaiting verification") + ". Delivery: " + ((Number(order.delivered) === 1 || order.status === "delivered") ? "Delivered" : "Not delivered yet") + ". This page refreshes automatically while you wait.";
             }

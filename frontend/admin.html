@@ -627,6 +627,7 @@
             <button class="admin-tab" data-tab="reports" onclick="switchAdminTab('reports')">📊 Reports</button>
             <button class="admin-tab" data-tab="workers" onclick="switchAdminTab('workers')">👷 Workers</button>
             <button class="admin-tab" data-tab="orders" onclick="switchAdminTab('orders')">📋 Orders</button>
+            <button class="admin-tab" data-tab="inventory" onclick="switchAdminTab('inventory')">📦 Inventory</button>
         </div>
 
         <!-- Products Tab -->
@@ -763,6 +764,49 @@
                 </div>
             </div>
         </div>
+<!-- Inventory Tab -->
+        <div id="tab-inventory" class="admin-tab-content" style="display:none;">
+            <div class="admin-layout" style="padding:0;">
+                <div class="admin-card2">
+                    <h2>📦 Current Stock</h2>
+                    <p class="sub">Live inventory from the database (source of truth). Out-of-stock products are not deleted — they remain listed.</p>
+                    <div style="overflow-x:auto;">
+                        <table class="report-table" id="adminInventoryTable">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th>Stock</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminInventoryBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="admin-card2">
+                    <h2>🔄 Stock Movements</h2>
+                    <p class="sub">Why stock changed (received, physical/online sale, cancelled, adjustment...).</p>
+                    <div style="overflow-x:auto;">
+                        <table class="report-table" id="adminMovementsTable">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Change</th>
+                                    <th>Type</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminMovementsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
     </main>
 </div>
 
@@ -908,6 +952,55 @@ function switchAdminTab(tabName) {
     if (tabName === "reports") loadReports();
     if (tabName === "workers") loadWorkers();
     if (tabName === "orders") loadOrders();
+    if (tabName === "inventory") loadAdminInventory();
+}
+
+/* ===== Inventory tab (staff) ===== */
+function loadAdminInventory() {
+    apiGetInventory().then(function (data) {
+        var invBody = document.getElementById("adminInventoryBody");
+        var movBody = document.getElementById("adminMovementsBody");
+        if (invBody) {
+            invBody.innerHTML = "";
+            if (!data.inventory || data.inventory.length === 0) {
+                invBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;padding:20px;">No products yet.</td></tr>';
+            } else {
+                data.inventory.forEach(function (row) {
+                    var state, color;
+                    if (row.out_of_stock) { state = "Out of Stock"; color = "#e53935"; }
+                    else if (row.low_stock) { state = "Low Stock"; color = "#f59e0b"; }
+                    else { state = "In Stock"; color = "#16a34a"; }
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + row.name + '</td>' +
+                        '<td>' + (row.category || '—') + '</td>' +
+                        '<td style="font-weight:700;">' + row.quantity + '</td>' +
+                        '<td style="color:' + color + ';font-weight:600;">' + state + '</td>';
+                    invBody.appendChild(tr);
+                });
+            }
+        }
+        if (movBody) {
+            movBody.innerHTML = "";
+            if (!data.movements || data.movements.length === 0) {
+                movBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;padding:20px;">No movements yet.</td></tr>';
+            } else {
+                data.movements.forEach(function (m) {
+                    var change = Number(m.change_qty);
+                    var diff = change > 0 ? ('<span style="color:#16a34a;">+' + change + '</span>') : ('<span style="color:#e53935;">' + change + '</span>');
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + (m.product_name || ('#' + m.product_id)) + '</td>' +
+                        '<td>' + diff + ' <small style="color:#999;">(' + m.qty_before + ' → ' + m.qty_after + ')</small></td>' +
+                        '<td>' + (m.movement_type || '—') + '</td>' +
+                        '<td>' + new Date(m.created_at).toLocaleString() + '</td>';
+                    movBody.appendChild(tr);
+                });
+            }
+        }
+    }).catch(function (err) {
+        if (invBody) invBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#e53935;padding:20px;">Failed to load inventory: ' + err.message + '</td></tr>';
+    });
 }
 
 /* ===== Reports ===== */

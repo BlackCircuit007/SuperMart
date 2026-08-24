@@ -70,6 +70,12 @@ async function createTables() {
         // Existing databases need this migration too.
         await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered INTEGER NOT NULL DEFAULT 0`);
 
+        // Provider-neutral payment fields (Flutterwave integration). Historical
+        // rows keep NULL here; payment_status ('pending'/'verified'/'failed')
+        // remains the single source of truth for paid/not-paid.
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_provider TEXT`);
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_transaction_id TEXT`);
+
         // Verification codes table
         await client.query(`
             CREATE TABLE IF NOT EXISTS verification_codes (
@@ -130,6 +136,97 @@ async function createTables() {
                 updated_at TEXT NOT NULL
             )
         `);
+
+        // Supermarkets table — supports multiple stores later.
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS supermarkets (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Per-supermarket inventory. One row per (supermarket, product).
+        // This is the single source of truth for stock quantities.
+        // Each supermarket owns its own quantity (A=10, B=3, C=0).
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS inventory (
+                id SERIAL PRIMARY KEY,
+                supermarket_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (supermarket_id, product_id)
+            )
+        `);
+
+        // Stock movement history: answer "why did stock go from 20 to 14?"
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS stock_movements (
+                id SERIAL PRIMARY KEY,
+                inventory_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                supermarket_id INTEGER NOT NULL,
+                change_qty INTEGER NOT NULL,
+                qty_before INTEGER NOT NULL,
+                qty_after INTEGER NOT NULL,
+                movement_type TEXT NOT NULL,
+                reference_type TEXT,
+                reference_id TEXT,
+                actor_user_id INTEGER,
+                note TEXT,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // ---- Phase 4 migrations -------------------------------------------------
+
+        // Product identifiers (Phase 4 requirement #5/#6). Nullable so existing
+        // rows keep working; unique indexes stop the same product being
+        // registered twice under the same identifier. Internal `id` remains the
+        // primary identifier; these are ADDITIONAL lookup keys.
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sku TEXT`);
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode TEXT`);
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS qr_identifier TEXT`);
+        await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products (sku)`);
+        await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products (barcode)`);
+        await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_products_qr ON products (qr_identifier)`);
+
+        // POS idempotency ledger (requirement #14). The SAME external sale must
+        // never deduct stock twice — enforced at the database level by the
+        // UNIQUE (supermarket_id, external_sale_id) constraint.
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS pos_transactions (
+                id SERIAL PRIMARY KEY,
+                external_sale_id TEXT NOT NULL,
+                supermarket_id INTEGER NOT NULL,
+                items_summary TEXT,
+                processed_at TEXT NOT NULL,
+                UNIQUE (supermarket_id, external_sale_id)
+            )
+        `);
+
+        // Integration logging (requirement #21). Never stores secrets.
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS integration_logs (
+                id SERIAL PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                supermarket_id INTEGER,
+                reference TEXT,
+                detail TEXT,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        // Indexes so "what happened on August 24?" stays fast as history grows
+        // (requirement #10/#11). created_at is ISO-8601 text, which compares
+        // correctly as a string for date-range filters.
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_movements_store_date ON stock_movements (supermarket_id, created_at)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_movements_product ON stock_movements (product_id)`);
 
         await client.query('COMMIT');
         console.log('✅ Database tables ready');
@@ -212,6 +309,26 @@ async function removeWhere(collection, predicate) {
     return toRemove.length;
 }
 
+// Run `callback` inside a single database transaction. The callback receives a
+// pg client, and if it throws, every statement it issued is rolled back.
+// This is the foundation for atomic, oversell-safe stock operations.
+async function withTransaction(callback) {
+    const client = await pool.connect();
+    let committed = false;
+    try {
+        await client.query('BEGIN');
+        const value = await callback(client);
+        await client.query('COMMIT');
+        committed = true;
+        return value;
+    } finally {
+        if (!committed) {
+            try { await client.query('ROLLBACK'); } catch (ignore) {}
+        }
+        client.release();
+    }
+}
+
 // ===== Seed data =====
 async function seedData() {
     // Seed admin user
@@ -229,6 +346,40 @@ async function seedData() {
             created_at: new Date().toISOString()
         });
         console.log('✅ Admin user created: admin@triumphsmart.com / admin123');
+    }
+
+    // Seed the default supermarket (the platform's first/primary store).
+    const superRes = await pool.query("SELECT id FROM supermarkets WHERE slug = 'default'");
+    let defaultSupermarketId = superRes.rows[0] ? String(superRes.rows[0].id) : null;
+    if (!defaultSupermarketId) {
+        const created = await insert('supermarkets', {
+            name: 'Default Store',
+            slug: 'default',
+            is_active: 1,
+            created_at: new Date().toISOString()
+        });
+        defaultSupermarketId = String(created.id);
+        console.log('✅ Default supermarket created');
+    }
+
+    // One-time backfill: migrate legacy products.stock into the inventory table.
+    // inventory becomes the source of truth; products.stock is kept in sync as a mirror.
+    const allProducts = await getAll('products');
+    for (const p of allProducts) {
+        const existing = await pool.query(
+            'SELECT id FROM inventory WHERE supermarket_id = $1 AND product_id = $2',
+            [defaultSupermarketId, String(p.id)]
+        );
+        if (existing.rows.length === 0) {
+            await insert('inventory', {
+                supermarket_id: defaultSupermarketId,
+                product_id: String(p.id),
+                quantity: Number(p.stock) || 0,
+                low_stock_threshold: 5,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            });
+        }
     }
 
     // Seed products if empty
@@ -294,5 +445,6 @@ module.exports = {
     insert,
     update,
     remove,
-    removeWhere
+    removeWhere,
+    withTransaction
 };

@@ -2429,3 +2429,35 @@ body.dark-mode .payment-modal input[type="number"]{
 }
 
 
+/* ===== Stock availability badges ===== */
+.stock-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    margin: 2px 0 0 2px;
+    vertical-align: middle;
+}
+.stock-badge.in {
+    color: #0a7d2f;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.stock-badge.low {
+    color: #9a6b00;
+    background: rgba(245, 158, 11, 0.16);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+}
+.stock-badge.out {
+    color: #b3261e;
+    background: rgba(229, 57, 53, 0.13);
+    border: 1px solid rgba(229, 57, 53, 0.4);
+}
+.add-cart-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--c-muted, #9aa0a6);
+}

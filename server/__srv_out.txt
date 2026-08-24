@@ -1,0 +1,29 @@
+✅ Database tables ready
+Email service connection verified
+🚀 LordTempsMart server running on http://localhost:3100
+📊 API available at http://localhost:3100/api
+️ Frontend available at http://localhost:3100
+Place order error: error: error in argument for $1: could not parse "undefined" as type int: strconv.ParseInt: parsing "undefined": invalid syntax
+    at C:\Users\user\Documents\My works\COPY TO SELL\node_modules\pg\lib\client.js:694:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Users\user\Documents\My works\COPY TO SELL\server\index.js:1001:37
+    at async Object.withTransaction (C:\Users\user\Documents\My works\COPY TO SELL\server\db.js:320:23)
+    at async C:\Users\user\Documents\My works\COPY TO SELL\server\index.js:992:28 {
+  length: 237,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: 'statement summary "SELECT id, name, price FROM products"',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'datum.go',
+  line: '277',
+  routine: 'MakeParseError'
+}

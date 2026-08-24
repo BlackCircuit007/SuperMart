@@ -540,10 +540,14 @@
             </div>
         </div>
 
-        <!-- Worker Tabs: Products & Orders only (NO Reports, NO Workers) -->
+        <!-- Live online-order notifications (SSE) -->
+        <div id="worker-order-notifications" style="padding:0 4%; max-width:1400px; margin:0 auto;"></div>
+
+        <!-- Worker Tabs: Products, Orders & Inventory (staff) -->
         <div class="admin-tabs">
             <button class="admin-tab active" data-tab="products" onclick="switchWorkerTab('products')">📦 Products</button>
             <button class="admin-tab" data-tab="orders" onclick="switchWorkerTab('orders')">📋 Orders</button>
+            <button class="admin-tab" data-tab="inventory" onclick="switchWorkerTab('inventory')">📦 Inventory</button>
         </div>
 
         <!-- Products Tab -->
@@ -648,6 +652,57 @@
                 </div>
             </div>
         </div>
+<!-- Inventory Tab (staff) -->
+        <div id="tab-inventory" class="admin-tab-content" style="display:none;">
+            <div class="admin-layout" style="padding:0;">
+                <div class="admin-card">
+                    <h2>🛒 Physical Sale (Scan / Lookup)</h2>
+                    <p class="sub">Scan a QR/barcode or type an ID/SKU. Prices come from the database — never from the code.</p>
+
+                    <label>Scan or enter product identifier</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="worker-scan-input" placeholder="QR / barcode / SKU / product ID" autocomplete="off" style="flex:1;">
+                        <button class="admin-btn green" style="width:auto;margin-top:0;padding:10px 16px;" onclick="scanWorkerProduct()">Add</button>
+                    </div>
+                    <p id="worker-scan-status" style="font-size:13px;color:var(--c-text-secondary);margin:8px 0 0;"></p>
+
+                    <label>Current sale items</label>
+                    <div id="worker-sale-session">
+                        <p style="color:#999;font-size:14px;">No items yet — scan a product to begin.</p>
+                    </div>
+
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+                        <strong>Total: <span id="worker-sale-total">₦0</span></strong>
+                        <button class="admin-btn" style="width:auto;margin-top:0;padding:10px 18px;" onclick="completeWorkerSale()">Complete Sale</button>
+                    </div>
+                </div>
+                <div class="admin-card2">
+                    <h2>📦 Current Stock</h2>
+                    <p class="sub">Out-of-stock products remain listed (they are not deleted).</p>
+                    <div style="overflow-x:auto;">
+                        <table class="report-table">
+                            <thead>
+                                <tr><th>Product</th><th>Stock</th><th>Status</th></tr>
+                            </thead>
+                            <tbody id="workerInventoryBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="admin-card2">
+                    <h2>🔄 Stock Movements</h2>
+                    <p class="sub">Why stock changed.</p>
+                    <div style="overflow-x:auto;">
+                        <table class="report-table">
+                            <thead>
+                                <tr><th>Product</th><th>Change</th><th>Type</th><th>Date</th></tr>
+                            </thead>
+                            <tbody id="workerMovementsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
     </main>
 </div>
 
@@ -809,7 +864,249 @@ function switchWorkerTab(tabName) {
     document.getElementById("tab-" + tabName).style.display = "block";
 
     if (tabName === "orders") loadWorkerOrders();
+    if (tabName === "inventory") loadWorkerInventory();
 }
+
+/* ===== Worker inventory tab ===== */
+function loadWorkerInventory() {
+    apiGetInventory().then(function (data) {
+        var invBody = document.getElementById("workerInventoryBody");
+        var movBody = document.getElementById("workerMovementsBody");
+
+        if (sel) {
+            var current = sel.value;
+            var opts = '<option value="">Select product...</option>';
+            (data.inventory || []).forEach(function (row) {
+                if (row.in_stock) opts += '<option value="' + row.product_id + '">' + row.name + ' (' + row.quantity + ' left)</option>';
+            });
+            sel.innerHTML = opts;
+            try { sel.value = current; } catch (e) {}
+        }
+        if (invBody) {
+            invBody.innerHTML = "";
+            if (!data.inventory || data.inventory.length === 0) {
+                invBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:20px;">No products yet.</td></tr>';
+            } else {
+                data.inventory.forEach(function (row) {
+                    var state, color;
+                    if (row.out_of_stock) { state = "Out of Stock"; color = "#e53935"; }
+                    else if (row.low_stock) { state = "Low Stock"; color = "#f59e0b"; }
+                    else { state = "In Stock"; color = "#16a34a"; }
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + row.name + '</td>' +
+                        '<td style="font-weight:700;">' + row.quantity + '</td>' +
+                        '<td style="color:' + color + ';font-weight:600;">' + state + '</td>';
+                    invBody.appendChild(tr);
+                });
+            }
+        }
+        if (movBody) {
+            movBody.innerHTML = "";
+            if (!data.movements || data.movements.length === 0) {
+                movBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;padding:20px;">No movements yet.</td></tr>';
+            } else {
+                data.movements.forEach(function (m) {
+                    var change = Number(m.change_qty);
+                    var diff = change > 0 ? ('<span style="color:#16a34a;">+' + change + '</span>') : ('<span style="color:#e53935;">' + change + '</span>');
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        '<td>' + (m.product_name || ('#' + m.product_id)) + '</td>' +
+                        '<td>' + diff + ' <small style="color:#999;">(' + m.qty_before + ' → ' + m.qty_after + ')</small></td>' +
+                        '<td>' + (m.movement_type || '—') + '</td>' +
+                        '<td>' + new Date(m.created_at).toLocaleString() + '</td>';
+                    movBody.appendChild(tr);
+                });
+            }
+        }
+    }).catch(function (err) {
+        if (invBody) invBody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#e53935;padding:20px;">Failed to load inventory: ' + err.message + '</td></tr>';
+    });
+}
+
+/* ===== Physical sale session (scan-based) ===== */
+var workerSaleSession = []; // [{ productId, name, unitPrice, quantity, available }]
+
+function renderWorkerSaleSession() {
+    var box = document.getElementById("worker-sale-session");
+    var totalEl = document.getElementById("worker-sale-total");
+    if (!box) return;
+    if (workerSaleSession.length === 0) {
+        box.innerHTML = '<p style="color:#999;font-size:14px;">No items yet — scan a product to begin.</p>';
+        if (totalEl) totalEl.textContent = "₦0";
+        return;
+    }
+    var html = "";
+    workerSaleSession.forEach(function (line, idx) {
+        html +=
+            '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--c-border);">' +
+            '<div style="flex:1;"><strong>' + line.name + '</strong><br><small style="color:#999;">' +
+            price(line.unitPrice) + ' each • ' + line.available + ' in stock</small></div>' +
+            '<input type="number" min="1" value="' + line.quantity + '" data-idx="' + idx + '" ' +
+            'onchange="updateSaleQty(this.dataset.idx, this.value)" style="width:70px;padding:6px;">' +
+            '<b style="min-width:90px;text-align:right;">' + price(line.unitPrice * line.quantity) + '</b>' +
+            '<button class="delete-btn" style="width:auto;" onclick="removeSaleLine(' + idx + ')">✕</button>' +
+            '</div>';
+    });
+    box.innerHTML = html;
+    var total = workerSaleSession.reduce(function (s, l) { return s + l.unitPrice * l.quantity; }, 0);
+    if (totalEl) totalEl.textContent = price(total);
+}
+
+function updateSaleQty(idx, value) {
+    var qty = parseInt(value, 10);
+    var line = workerSaleSession[idx];
+    if (!line) return;
+    if (!qty || qty < 1) qty = 1;
+    if (qty > line.available) {
+        showToast("Only " + line.available + " unit(s) of " + line.name + " in stock", "error");
+        qty = line.available;
+    }
+    line.quantity = qty;
+    renderWorkerSaleSession();
+}
+
+function removeSaleLine(idx) {
+    workerSaleSession.splice(idx, 1);
+    renderWorkerSaleSession();
+}
+
+// Resolve a scanned/typed identifier to a product and add it to the session.
+// The identifier only IDENTIFIES — name/price/stock come from the database (#9).
+async function scanWorkerProduct() {
+    var input = document.getElementById("worker-scan-input");
+    var status = document.getElementById("worker-scan-status");
+    var identifier = input ? input.value.trim() : "";
+    if (!identifier) { showToast("Scan or type an identifier", "error"); return; }
+
+    try {
+        var found = await apiRequest('/api/products/lookup?identifier=' + encodeURIComponent(identifier));
+        var p = found.product;
+        if (!found.inStock) {
+            if (status) status.textContent = p.name + " is OUT OF STOCK.";
+            showToast(p.name + " is out of stock", "error");
+            input.value = "";
+            return;
+        }
+        var existing = workerSaleSession.find(function (l) { return String(l.productId) === String(p.id); });
+        if (existing) {
+            if (existing.quantity + 1 > found.quantityAvailable) {
+                showToast("Only " + found.quantityAvailable + " unit(s) available", "error");
+                return;
+            }
+            existing.quantity += 1;
+        } else {
+            workerSaleSession.push({
+                productId: p.id,
+                name: p.name,
+                unitPrice: Number(p.price),
+                quantity: 1,
+                available: found.quantityAvailable
+            });
+        }
+        if (status) status.textContent = "Added: " + p.name + " (" + found.identifierType + ")";
+        input.value = "";
+        input.focus();
+        renderWorkerSaleSession();
+    } catch (err) {
+        if (status) status.textContent = err.message || "Identifier not recognised";
+        showToast(err.message || "Unknown identifier", "error");
+    }
+}
+
+// Complete the WHOLE sale atomically — all items or nothing (#8).
+async function completeWorkerSale() {
+    if (workerSaleSession.length === 0) { showToast("Nothing to sell", "error"); return; }
+    var items = workerSaleSession.map(function (l) {
+        return { productId: l.productId, quantity: l.quantity };
+    });
+
+    var btn = document.querySelector('#tab-inventory .admin-btn[onclick="completeWorkerSale()"]');
+    if (btn) { btn.disabled = true; btn.textContent = "Processing..."; }
+
+    try {
+        await apiRequest('/api/admin/inventory/physical-sale-session', {
+            method: 'POST',
+            body: JSON.stringify({ items: items })
+        });
+        showToast("Physical sale completed ✓", "success");
+        workerSaleSession = [];
+        renderWorkerSaleSession();
+        loadWorkerInventory();
+    } catch (err) {
+        showToast(err.message || "Could not complete the sale", "error");
+        loadWorkerInventory(); // refresh stock states after a rejection
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Complete Sale"; }
+    }
+}
+
+/* ===== Live worker notifications for online orders (requirements #3/#4) ===== */
+var workerSeenOrderRefs = {};
+
+function showWorkerOrderNotification(payload) {
+    var banner = document.getElementById("worker-order-notifications");
+    if (!banner || !payload.orderRef) return;
+    if (workerSeenOrderRefs[payload.orderRef]) return; // no duplicate alerts
+    workerSeenOrderRefs[payload.orderRef] = true;
+
+    var lines = (payload.items || []).map(function (i) {
+        return '<div>• ' + i.name + ' × ' + i.quantity + '</div>';
+    }).join('');
+
+    var card = document.createElement('div');
+    card.className = 'admin-card2';
+    card.style.marginBottom = '12px';
+    card.style.borderColor = '#16a34a';
+    card.innerHTML =
+        '<h2 style="margin-bottom:4px;">🔔 NEW ONLINE ORDER</h2>' +
+        '<div style="font-weight:700;margin-bottom:6px;">Order #' + payload.orderRef + '</div>' +
+        lines +
+        '<div style="margin-top:6px;"><strong>Total: ₦' + Number(payload.total).toLocaleString() + '</strong></div>' +
+        '<div style="margin-top:4px;color:#16a34a;font-weight:600;">Status: NEW ORDER</div>';
+
+    banner.appendChild(card);
+    showToast("New online order #" + payload.orderRef, "success");
+
+    setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
+    if (typeof loadWorkerOrders === "function") loadWorkerOrders();
+}
+
+(function startWorkerOrderStream() {
+    window.addEventListener("DOMContentLoaded", function () {
+        if (!window.LordTempsInventoryStream || !getCurrentUser()) return;
+        var stream = window.LordTempsInventoryStream;
+        stream.addEventListener('online_order_created', function (e) {
+            try { showWorkerOrderNotification(JSON.parse(e.data)); } catch (err) {}
+        });
+        // Payment confirmation (Flutterwave verified server-side) — same banner UI.
+        stream.addEventListener('payment_confirmed', function (e) {
+            try {
+                var p = JSON.parse(e.data);
+                var banner = document.getElementById("worker-order-notifications");
+                if (!banner || !p.orderRef) return;
+                var card = document.createElement("div");
+                card.className = "admin-card2";
+                card.style.marginBottom = "12px";
+                card.style.borderColor = "#16a34a";
+                card.innerHTML =
+                    '<h2 style="margin-bottom:4px;">💰 PAYMENT CONFIRMED</h2>' +
+                    '<div style="font-weight:700;margin-bottom:6px;">Order #' + p.orderRef + '</div>' +
+                    '<div>' + (p.customerName || '') + '</div>' +
+                    '<div style="margin-top:6px;"><strong>Total: ₦' + Number(p.total).toLocaleString() + '</strong></div>' +
+                    '<div style="margin-top:4px;color:#16a34a;font-weight:600;">PAID via ' + (p.provider || 'flutterwave') + '</div>';
+                banner.appendChild(card);
+                showToast("Payment received for #" + p.orderRef, "success");
+                setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
+                if (typeof loadWorkerOrders === "function") loadWorkerOrders();
+            } catch (err) {}
+        });
+        stream.addEventListener('physical_sale_recorded', function () {
+            var tab = document.getElementById("tab-inventory");
+            if (tab && tab.style.display !== "none") loadWorkerInventory();
+        });
+    });
+})();
 
 /* ===== Load worker stats ===== */
 function loadWorkerStats() {
@@ -915,6 +1212,14 @@ window.addEventListener("DOMContentLoaded", function () {
         document.getElementById("workerInfo").textContent = "Logged in as " + currentUser.name;
         renderWorkerProductList();
         loadWorkerStats();
+
+        // Scanners "type" the code and press Enter — treat Enter as Add.
+        var scanInput = document.getElementById("worker-scan-input");
+        if (scanInput) {
+            scanInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { e.preventDefault(); scanWorkerProduct(); }
+            });
+        }
     } else {
         // Redirect non-workers to appropriate page
         if (loggedIn && currentUser && currentUser.role === 'admin') {

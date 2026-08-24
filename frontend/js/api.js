@@ -169,9 +169,31 @@ async function apiGetProducts() {
     return data.products;
 }
 
+async function apiGetAdminProducts() {
+    const data = await apiRequest('/api/admin/products');
+    return data.products || [];
+}
+
 async function apiGetProduct(id) {
     const data = await apiRequest('/api/products/' + id);
     return data.product;
+}
+
+async function apiSearchProducts(query) {
+    const data = await apiRequest('/api/products/search?q=' + encodeURIComponent(query));
+    return data.products || [];
+}
+
+async function apiGetCategories() {
+    const data = await apiRequest('/api/categories');
+    return data.categories || [];
+}
+
+async function apiCreateCategory(name) {
+    return apiRequest('/api/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name: name })
+    });
 }
 
 async function apiAddProduct(product) {
@@ -271,7 +293,9 @@ async function apiSaveCart(items) {
             name: item.name,
             price: Number(item.price) || 0,
             quantity: Math.max(1, Number(item.quantity) || 1),
-            image: item.image || '🛍️'
+            image: item.image || '🛍️',
+            purchase_type: item.purchase_type === 'carton' ? 'carton' : 'unit',
+            units_per_carton: item.units_per_carton || null
         };
     });
     return apiRequest('/api/cart', {
@@ -373,7 +397,7 @@ async function getCartItems() {
     });
 }
 
-async function addToCart(id) {
+async function addToCart(id, purchaseType) {
     const user = getCurrentUser();
     if (!user) {
         showToast('Please login first', 'error');
@@ -393,11 +417,18 @@ async function addToCart(id) {
         }
 
         const cart = await getCartItems();
-        const existingItem = cart.find(item => String(item.id) === String(id));
+        purchaseType = purchaseType === 'carton' ? 'carton' : 'unit';
+        if (purchaseType === 'carton' && (!product.carton_enabled || !product.units_per_carton || !product.carton_price)) {
+            showToast('Carton purchase is not available for this product', 'error'); return false;
+        }
+        const existingItem = cart.find(item => String(item.id) === String(id) && item.purchase_type === purchaseType);
         if (existingItem) {
             existingItem.quantity += 1;
         } else {
-            cart.push({ id: id, name: product.name, price: product.price, quantity: 1, image: product.image });
+            cart.push({ id: id, name: product.name,
+                price: purchaseType === 'carton' ? product.carton_price : product.price,
+                quantity: 1, image: product.image, purchase_type: purchaseType,
+                units_per_carton: purchaseType === 'carton' ? product.units_per_carton : null });
         }
         await apiSaveCart(cart);
         await updateCartCount();

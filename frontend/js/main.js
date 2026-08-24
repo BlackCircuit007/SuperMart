@@ -257,7 +257,7 @@ async function openQuickView(id) {
         return;
     }
 
-    quickViewProduct = { id: product.id, name: product.name, price: product.price };
+    quickViewProduct = product;
 
     var overlay = document.getElementById("quickviewOverlay");
     if (!overlay) return;
@@ -269,6 +269,12 @@ async function openQuickView(id) {
     document.getElementById("qvImage").innerHTML = imgHtml;
     document.getElementById("qvTitle").textContent = product.name;
     document.getElementById("qvPrice").textContent = price(product.price);
+    var purchase = document.getElementById("qvPurchaseType");
+    var cartonNote = document.getElementById("qvCartonNote");
+    if (purchase) {
+        purchase.innerHTML = '<option value="unit">Single unit</option>' + (product.carton_enabled ? '<option value="carton">Carton (' + price(product.carton_price) + ')</option>' : '');
+    }
+    if (cartonNote) cartonNote.textContent = product.carton_enabled ? product.units_per_carton + ' pieces per carton' : '';
     document.getElementById("qvRating").textContent = "★ " + product.rating;
     document.getElementById("qvDesc").textContent = product.description;
 
@@ -285,7 +291,8 @@ function closeQuickView() {
 
 async function quickViewAddToCart() {
     if (!quickViewProduct) return;
-    var added = await addToCart(quickViewProduct.id);
+    var purchase = document.getElementById("qvPurchaseType");
+    var added = await addToCart(quickViewProduct.id, purchase ? purchase.value : 'unit');
     if (added) closeQuickView();
 }
 

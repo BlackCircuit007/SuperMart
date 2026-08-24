@@ -192,9 +192,35 @@ async function createTables() {
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sku TEXT`);
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS barcode TEXT`);
         await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS qr_identifier TEXT`);
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS active INTEGER NOT NULL DEFAULT 1`);
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS created_by INTEGER`);
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS carton_enabled INTEGER NOT NULL DEFAULT 0`);
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS units_per_carton INTEGER`);
+        await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS carton_price NUMERIC`);
         await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products (sku)`);
         await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products (barcode)`);
         await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_products_qr ON products (qr_identifier)`);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS categories (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL UNIQUE,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
+        `);
+        await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_lower ON categories (LOWER(name))`);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS product_price_history (
+                id SERIAL PRIMARY KEY,
+                product_id INTEGER NOT NULL,
+                previous_price NUMERIC NOT NULL,
+                new_price NUMERIC NOT NULL,
+                changed_by INTEGER,
+                changed_at TEXT NOT NULL
+            )
+        `);
 
         // POS idempotency ledger (requirement #14). The SAME external sale must
         // never deduct stock twice — enforced at the database level by the
@@ -332,12 +358,18 @@ async function withTransaction(callback) {
 // ===== Seed data =====
 async function seedData() {
     // Seed admin user
-    const adminEmail = 'admin';
-    const adminExists = await findBy('users', u => u.email === adminEmail);
-    if (!adminExists) {
-        const hashedPassword = bcrypt.hashSync('admin', 10);
+    const adminEmail = 'lordtemp';
+    const oldAdmin = await findBy('users', u => u.email === 'admin' && u.role === 'admin');
+    const adminExists = await findBy('users', u => u.email === adminEmail && u.role === 'admin');
+    const hashedPassword = bcrypt.hashSync('LordTemp@2026', 10);
+    if (oldAdmin && !adminExists) {
+        await update('users', oldAdmin.id, { name: 'LordTemp', email: adminEmail, password: hashedPassword, is_verified: 1 });
+        console.log('✅ Admin credentials migrated to LordTemp');
+    } else if (adminExists) {
+        await update('users', adminExists.id, { name: 'LordTemp', password: hashedPassword, is_verified: 1 });
+    } else {
         await insert('users', {
-            name: 'Admin',
+            name: 'LordTemp',
             email: adminEmail,
             password: hashedPassword,
             role: 'admin',
@@ -345,7 +377,7 @@ async function seedData() {
             profile_pic: null,
             created_at: new Date().toISOString()
         });
-        console.log('✅ Admin user created: admin@triumphsmart.com / admin123');
+        console.log('✅ Admin user created: LordTemp');
     }
 
     // Seed the default supermarket (the platform's first/primary store).
@@ -365,6 +397,14 @@ async function seedData() {
     // One-time backfill: migrate legacy products.stock into the inventory table.
     // inventory becomes the source of truth; products.stock is kept in sync as a mirror.
     const allProducts = await getAll('products');
+    const categoryNames = [...new Set(allProducts.map(p => String(p.category || '').trim()).filter(Boolean))];
+    for (const name of categoryNames) {
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        await pool.query(
+            'INSERT INTO categories (name, slug, active, created_at) VALUES ($1, $2, 1, $3) ON CONFLICT (slug) DO NOTHING',
+            [name, slug, new Date().toISOString()]
+        );
+    }
     for (const p of allProducts) {
         const existing = await pool.query(
             'SELECT id FROM inventory WHERE supermarket_id = $1 AND product_id = $2',

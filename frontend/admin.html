@@ -573,11 +573,11 @@
         <p style="color:var(--c-text-secondary);margin-bottom:24px;">Enter your admin credentials to manage the store.</p>
         <div class="admin-card" style="text-align:left;max-width:380px;margin:0 auto;">
             <label>Email</label>
-            <input type="email" id="admin-login-email" placeholder="admin@LordTempsmart.com" autocomplete="off">
+            <input type="text" id="admin-login-email" placeholder="LordTemp" autocomplete="username">
             <label>Password</label>
             <input type="password" id="admin-login-password" placeholder="Enter password">
             <button class="admin-btn" onclick="adminLogin()">Login to Admin Panel</button>
-            <p style="text-align:center;font-size:12px;color:#999;margin-top:14px;">Default: <b>admin@LordTempsmart.com</b> / <b>admin123</b></p>
+            <p style="text-align:center;font-size:12px;color:#999;margin-top:14px;">Username: <b>LordTemp</b></p>
         </div>
     </div>
 </div>
@@ -649,10 +649,7 @@
                     </div>
 
                     <label>Category</label>
-                    <select id="admin-category">
-                        <option value="Skin Care">🧴 Skin Care</option>
-                        <option value="Provisions">🍚 Provisions</option>
-                    </select>
+                    <div style="display:flex;gap:8px;"><select id="admin-category" style="flex:1;"></select><button type="button" class="admin-btn green" style="width:auto;margin-top:0;" onclick="createAdminCategory()">+ Add New Category</button></div>
 
                     <label>Product Name</label>
                     <input type="text" id="admin-name" placeholder="e.g. Vitamin C Serum" autocomplete="off">
@@ -662,6 +659,13 @@
 
                     <label>Price (₦)</label>
                     <input type="number" id="admin-price" placeholder="e.g. 8500" min="1">
+
+                    <label>Barcode (scan or enter)</label>
+                    <input type="text" id="admin-barcode" placeholder="Focus this field, then scan" autocomplete="off">
+
+                    <label>Carton purchasing</label>
+                    <select id="admin-carton-enabled" onchange="toggleCartonFields('admin')"><option value="0">No</option><option value="1">Yes</option></select>
+                    <div id="admin-carton-fields" style="display:none;"><label>Units per carton</label><input type="number" id="admin-units-per-carton" min="2"><label>Carton price (₦)</label><input type="number" id="admin-carton-price" min="1"></div>
 
                     <label>Stock Quantity</label>
                     <input type="number" id="admin-stock" placeholder="e.g. 50" min="0" value="10">
@@ -866,7 +870,7 @@ function renderAdminProductList() {
     var container = document.getElementById("admin-product-list");
     if (!container) return;
 
-    apiGetProducts().then(function (products) {
+    apiGetAdminProducts().then(function (products) {
         var stats = document.getElementById("adminStats");
         if (stats) stats.textContent = products.length + " products in store";
 
@@ -879,14 +883,37 @@ function renderAdminProductList() {
             item.className = "admin-product-item";
             item.innerHTML =
                 '<div class="thumb">' + imgHtml + "</div>" +
-                '<div class="info"><h4>' + p.name + '</h4><span class="cat">' + p.category + ' • Stock: ' + (p.stock || 0) + '</span></div>' +
+                '<div class="info"><h4>' + p.name + '</h4><span class="cat">' + p.category + ' • Stock: ' + (p.stock || 0) + ' • Added by: ' + (p.created_by_name || p.created_by_username || 'Unknown') + '</span></div>' +
                 '<div class="price">' + price(p.price) + "</div>" +
+                '<button class="admin-btn" style="width:auto;margin-top:0;" data-pid="' + p.id + '" onclick="editAdminProduct(this.dataset.pid)">Edit</button>' +
                 '<button class="delete-btn" data-pid="' + p.id + '" onclick="confirmDeleteProduct(this.dataset.pid)">🗑 Delete</button>';
             container.appendChild(item);
         });
     }).catch(function (err) {
         container.innerHTML = '<div class="empty-state"><p>Failed to load products: ' + err.message + '</p></div>';
     });
+}
+
+function loadAdminCategories() {
+    apiGetCategories().then(function (categories) {
+        var select = document.getElementById('admin-category');
+        if (select) select.innerHTML = categories.map(function (c) { return '<option value="' + c.name.replace(/"/g, '&quot;') + '">' + c.name + '</option>'; }).join('');
+    });
+}
+
+function createAdminCategory() {
+    var name = prompt('New category name');
+    if (!name || !name.trim()) return;
+    apiCreateCategory(name.trim()).then(function (data) { loadAdminCategories(); setTimeout(function () { document.getElementById('admin-category').value = data.category.name; }, 150); showToast('Category created', 'success'); }).catch(function (err) { showToast(err.message, 'error'); });
+}
+
+function editAdminProduct(id) {
+    apiGetProduct(id).then(function (p) {
+        var name = prompt('Product name', p.name); if (name === null) return;
+        var nextPrice = prompt('Current price', p.price); if (nextPrice === null) return;
+        var barcode = prompt('Barcode (leave blank to clear)', p.barcode || ''); if (barcode === null) return;
+        apiUpdateProduct(id, { name: name.trim(), price: Number(nextPrice), barcode: barcode.trim() }).then(function () { showToast('Product updated', 'success'); renderAdminProductList(); }).catch(function (err) { showToast(err.message, 'error'); });
+    }).catch(function (err) { showToast(err.message, 'error'); });
 }
 
 function confirmDeleteProduct(id) {
@@ -908,6 +935,10 @@ function adminAddProductForm() {
     var description = document.getElementById("admin-desc").value.trim();
     var featured = document.getElementById("admin-featured").checked;
     var stock = parseInt(document.getElementById("admin-stock").value) || 0;
+    var barcode = document.getElementById("admin-barcode").value.trim();
+    var cartonEnabled = document.getElementById("admin-carton-enabled").value === '1';
+    var unitsPerCarton = parseInt(document.getElementById("admin-units-per-carton").value, 10);
+    var cartonPrice = parseFloat(document.getElementById("admin-carton-price").value);
 
     if (!name || !price || !description) {
         showToast("Please fill in name, price, and description", "error");
@@ -927,6 +958,7 @@ function adminAddProductForm() {
         gallery: images,
         featured: featured,
         stock: stock
+        , barcode: barcode, carton_enabled: cartonEnabled, units_per_carton: unitsPerCarton, carton_price: cartonPrice
     };
 
     apiAddProduct(product).then(function () {
@@ -1132,6 +1164,7 @@ function loadAdminStats() {
 
 /* Init */
 window.addEventListener("DOMContentLoaded", function () {
+    loadAdminCategories();
     initTheme();
     initBackToTop();
     updateAuthUI();

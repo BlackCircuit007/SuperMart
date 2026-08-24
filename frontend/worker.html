@@ -589,10 +589,7 @@
                     </div>
 
                     <label>Category</label>
-                    <select id="worker-category">
-                        <option value="Skin Care">🧴 Skin Care</option>
-                        <option value="Provisions">🍚 Provisions</option>
-                    </select>
+                    <select id="worker-category"></select>
 
                     <label>Product Name</label>
                     <input type="text" id="worker-name" placeholder="e.g. Vitamin C Serum" autocomplete="off">
@@ -602,6 +599,9 @@
 
                     <label>Price (₦)</label>
                     <input type="number" id="worker-price" placeholder="e.g. 8500" min="1">
+
+                    <label>Barcode (scan or enter)</label>
+                    <input type="text" id="worker-barcode" placeholder="Focus this field, then scan" autocomplete="off">
 
                     <label>Stock Quantity</label>
                     <input type="number" id="worker-stock" placeholder="e.g. 50" min="0" value="10">
@@ -656,12 +656,16 @@
         <div id="tab-inventory" class="admin-tab-content" style="display:none;">
             <div class="admin-layout" style="padding:0;">
                 <div class="admin-card">
-                    <h2>🛒 Physical Sale (Scan / Lookup)</h2>
-                    <p class="sub">Scan a QR/barcode or type an ID/SKU. Prices come from the database — never from the code.</p>
+                    <h2>🛒 Physical Sale</h2>
+                    <p class="sub">Search by product name or scan a barcode. Prices and stock come from the database.</p>
+
+                    <label>Search products</label>
+                    <input type="search" id="worker-product-search" placeholder="Search products..." autocomplete="off" oninput="searchWorkerProducts(this.value)">
+                    <div id="worker-product-results"></div>
 
                     <label>Scan or enter product identifier</label>
                     <div style="display:flex;gap:8px;">
-                        <input type="text" id="worker-scan-input" placeholder="QR / barcode / SKU / product ID" autocomplete="off" style="flex:1;">
+                        <input type="text" id="worker-scan-input" placeholder="Scan / enter barcode" autocomplete="off" style="flex:1;">
                         <button class="admin-btn green" style="width:auto;margin-top:0;padding:10px 16px;" onclick="scanWorkerProduct()">Add</button>
                     </div>
                     <p id="worker-scan-status" style="font-size:13px;color:var(--c-text-secondary);margin:8px 0 0;"></p>
@@ -789,6 +793,13 @@ function renderWorkerProductList() {
     });
 }
 
+function loadWorkerCategories() {
+    apiGetCategories().then(function (categories) {
+        var select = document.getElementById('worker-category');
+        if (select) select.innerHTML = categories.map(function (c) { return '<option value="' + c.name.replace(/"/g, '&quot;') + '">' + c.name + '</option>'; }).join('');
+    });
+}
+
 /* ===== Add product from worker form ===== */
 function workerAddProductForm() {
     var name = document.getElementById("worker-name").value.trim();
@@ -798,6 +809,7 @@ function workerAddProductForm() {
     var description = document.getElementById("worker-desc").value.trim();
     var featured = document.getElementById("worker-featured").checked;
     var stock = parseInt(document.getElementById("worker-stock").value) || 0;
+    var barcode = document.getElementById("worker-barcode").value.trim();
 
     if (!name || !price || !description) {
         showToast("Please fill in name, price, and description", "error");
@@ -816,7 +828,7 @@ function workerAddProductForm() {
         image: images[0] || "🛍️",
         gallery: images,
         featured: featured,
-        stock: stock
+        stock: stock, barcode: barcode
     };
 
     apiAddProduct(product).then(function () {
@@ -927,6 +939,30 @@ function loadWorkerInventory() {
 /* ===== Physical sale session (scan-based) ===== */
 var workerSaleSession = []; // [{ productId, name, unitPrice, quantity, available }]
 
+function addWorkerSaleProduct(p, purchaseType) {
+    var carton = purchaseType === 'carton';
+    var units = carton ? Number(p.units_per_carton) : 1;
+    var priceValue = carton ? Number(p.carton_price) : Number(p.price);
+    if (carton && (!p.carton_enabled || !units || !p.carton_price)) { showToast('Carton purchase is not available', 'error'); return; }
+    var existing = workerSaleSession.find(function (l) { return String(l.productId) === String(p.id) && l.purchaseType === purchaseType; });
+    if (existing) existing.quantity += 1;
+    else workerSaleSession.push({ productId: p.id, name: p.name, unitPrice: priceValue, quantity: 1, available: Math.floor(Number(p.stock_available) / units), purchaseType: purchaseType, unitsPerCarton: units });
+    renderWorkerSaleSession();
+}
+
+var workerSearchTimer;
+function searchWorkerProducts(value) {
+    clearTimeout(workerSearchTimer);
+    var box = document.getElementById('worker-product-results');
+    if (!value.trim()) { box.innerHTML = ''; return; }
+    workerSearchTimer = setTimeout(function () {
+        apiSearchProducts(value.trim()).then(function (products) {
+            box.innerHTML = products.map(function (p) { return '<div class="admin-product-item"><div class="info"><h4>' + p.name + '</h4><span class="cat">' + price(p.price) + ' • Stock: ' + p.stock_available + '</span></div><button class="admin-btn" style="width:auto;margin:0" onclick="addWorkerSaleProduct(window.workerSearchProducts[' + JSON.stringify(String(p.id)) + '],\'unit\')">Add</button></div>'; }).join('') || '<p class="sub">Product not found</p>';
+            window.workerSearchProducts = {}; products.forEach(function (p) { window.workerSearchProducts[String(p.id)] = p; });
+        }).catch(function (err) { box.innerHTML = '<p class="sub">' + err.message + '</p>'; });
+    }, 250);
+}
+
 function renderWorkerSaleSession() {
     var box = document.getElementById("worker-sale-session");
     var totalEl = document.getElementById("worker-sale-total");
@@ -941,7 +977,7 @@ function renderWorkerSaleSession() {
         html +=
             '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--c-border);">' +
             '<div style="flex:1;"><strong>' + line.name + '</strong><br><small style="color:#999;">' +
-            price(line.unitPrice) + ' each • ' + line.available + ' in stock</small></div>' +
+            price(line.unitPrice) + (line.purchaseType === 'carton' ? ' per carton' : ' each') + ' • ' + line.available + ' available</small></div>' +
             '<input type="number" min="1" value="' + line.quantity + '" data-idx="' + idx + '" ' +
             'onchange="updateSaleQty(this.dataset.idx, this.value)" style="width:70px;padding:6px;">' +
             '<b style="min-width:90px;text-align:right;">' + price(line.unitPrice * line.quantity) + '</b>' +
@@ -1018,7 +1054,7 @@ async function scanWorkerProduct() {
 async function completeWorkerSale() {
     if (workerSaleSession.length === 0) { showToast("Nothing to sell", "error"); return; }
     var items = workerSaleSession.map(function (l) {
-        return { productId: l.productId, quantity: l.quantity };
+        return { productId: l.productId, quantity: l.quantity, purchaseType: l.purchaseType };
     });
 
     var btn = document.querySelector('#tab-inventory .admin-btn[onclick="completeWorkerSale()"]');
@@ -1171,6 +1207,7 @@ function openWorkerOrderUpdate(orderId) {
 
 /* ===== Init ===== */
 window.addEventListener("DOMContentLoaded", function () {
+    loadWorkerCategories();
     initTheme();
     initBackToTop();
     updateAuthUI();

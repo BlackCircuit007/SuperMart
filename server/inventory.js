@@ -447,7 +447,7 @@ async function recordPhysicalSaleSession({
 
             // Authoritative product + price from the database.
             const prodRes = await client.query(
-                'SELECT id, name, price FROM products WHERE id = $1',
+                'SELECT id, name, price, active, carton_enabled, units_per_carton, carton_price FROM products WHERE id = $1',
                 [productId]
             );
             if (prodRes.rows.length === 0) {
@@ -456,6 +456,21 @@ async function recordPhysicalSaleSession({
                 throw e;
             }
             const prod = prodRes.rows[0];
+            if (prod.active === 0) {
+                const e = new Error('Product is inactive: ' + prod.name);
+                e.status = 409;
+                throw e;
+            }
+            const purchaseType = item.purchaseType === 'carton' ? 'carton' : 'unit';
+            if (purchaseType === 'carton' && (!prod.carton_enabled || !prod.units_per_carton || !prod.carton_price)) {
+                const e = new Error('Carton purchase is not available for "' + prod.name + '"');
+                e.status = 400;
+                throw e;
+            }
+            const requestedQuantity = Math.max(1, Math.floor(Number(item.quantity) || 1));
+            const inventoryQuantity = purchaseType === 'carton'
+                ? requestedQuantity * Number(prod.units_per_carton)
+                : requestedQuantity;
 
             const beforeRes = await client.query(
                 'SELECT quantity FROM inventory WHERE supermarket_id = $1 AND product_id = $2',
@@ -467,7 +482,7 @@ async function recordPhysicalSaleSession({
                 supermarketId: sid,
                 productId: prod.id,
                 productName: prod.name,
-                quantity: qty,
+                quantity: inventoryQuantity,
                 movementType: MOVEMENT_TYPES.PHYSICAL_SALE,
                 referenceType: referenceType || 'physical_sale',
                 referenceId,
@@ -479,8 +494,11 @@ async function recordPhysicalSaleSession({
                 productId: String(prod.id),
                 name: prod.name,
                 unitPrice: Number(prod.price),
-                quantity: qty,
-                lineTotal: Number(prod.price) * qty,
+                quantity: requestedQuantity,
+                purchaseType,
+                unitsPerCarton: purchaseType === 'carton' ? Number(prod.units_per_carton) : null,
+                unitPrice: purchaseType === 'carton' ? Number(prod.carton_price) : Number(prod.price),
+                lineTotal: (purchaseType === 'carton' ? Number(prod.carton_price) : Number(prod.price)) * requestedQuantity,
                 quantityBefore: qtyBefore,
                 quantityAfter: out.quantity,
                 becameOutOfStock: out.quantity <= 0 && qtyBefore > 0

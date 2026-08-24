@@ -111,10 +111,13 @@ function productCardHtml(p) {
         '<div class="card-meta">' +
         '<span class="card-rating"><span class="star">★</span> ' + p.rating + "</span>" +
         "</div>" +
-        '<div class="price-row"><span class="price">' + price(p.price) + "</span></div>" +
+        '<div class="price-row"><span class="price">' + price(p.price) + "</span>" +
+        (p.carton_enabled ? '<small class="carton-summary">Carton: ' + price(p.carton_price) + ' (' + p.units_per_carton + ' pieces)</small>' : '') +
+        '</div>' +
         '<div class="card-actions">' +
         addCartButtonHtml(p, productId) +
         '<button type="button" class="quickview-btn" data-product-action="quick-view" data-product-id=' + productId + '>Quick View</button>' +
+        "</div>" +
         "</div>" +
         "</div>"
     );

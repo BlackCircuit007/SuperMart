@@ -4,6 +4,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
+const { pool } = db;
 const inventory = require('./inventory');
 const emailService = require('./email');
 const events = require('./events');
@@ -472,7 +473,8 @@ app.get('/api/me', authRequired, async (req, res) => {
 // Get all products
 app.get('/api/products', async (req, res) => {
     try {
-        const products = await db.getAll('products');
+        const result = await pool.query('SELECT * FROM products WHERE active = 1 ORDER BY id DESC');
+        const products = result.rows;
         products.sort((a, b) => Number(b.id) - Number(a.id));
         await enrichProductsWithInventory(products);
         res.json({ products });
@@ -480,6 +482,60 @@ app.get('/api/products', async (req, res) => {
         console.error('Get products error:', err);
         res.status(500).json({ error: 'Server error' });
     }
+});
+
+// Creator details are restricted to administrators; the public catalog does
+// not expose staff identities.
+app.get('/api/admin/products', authRequired, adminRequired, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT p.*, u.name AS created_by_name, u.email AS created_by_username
+             FROM products p LEFT JOIN users u ON u.id = p.created_by
+             ORDER BY p.id DESC`
+        );
+        await enrichProductsWithInventory(result.rows);
+        res.json({ products: result.rows });
+    } catch (err) {
+        console.error('Get admin products error:', err);
+        res.status(500).json({ error: 'Server error loading admin products' });
+    }
+});
+
+// Staff search stays database-backed and returns a bounded result set.
+app.get('/api/products/search', authRequired, workerOrAdminRequired, async (req, res) => {
+    try {
+        const query = String(req.query.q || '').trim();
+        const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+        if (!query) return res.json({ products: [] });
+        const result = await pool.query(
+            `SELECT * FROM products WHERE active = 1
+             AND (name ILIKE $1 OR COALESCE(barcode, '') ILIKE $1)
+             ORDER BY CASE WHEN barcode = $2 THEN 0 ELSE 1 END, name LIMIT $3`,
+            ['%' + query + '%', query, limit]
+        );
+        await enrichProductsWithInventory(result.rows);
+        res.json({ products: result.rows });
+    } catch (err) {
+        console.error('Product search error:', err);
+        res.status(500).json({ error: 'Server error searching products' });
+    }
+});
+
+app.get('/api/categories', async (req, res) => {
+    try { res.json({ categories: await db.findAll('categories', c => c.active !== 0) }); }
+    catch (err) { res.status(500).json({ error: 'Server error loading categories' }); }
+});
+
+app.post('/api/categories', authRequired, adminRequired, async (req, res) => {
+    try {
+        const name = String(req.body.name || '').trim();
+        if (!name) return res.status(400).json({ error: 'Category name is required' });
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const duplicate = await pool.query('SELECT id FROM categories WHERE LOWER(name) = LOWER($1)', [name]);
+        if (duplicate.rows.length) return res.status(409).json({ error: 'Category already exists' });
+        const category = await db.insert('categories', { name, slug, active: 1, created_at: new Date().toISOString() });
+        res.status(201).json({ category });
+    } catch (err) { res.status(500).json({ error: 'Server error creating category' }); }
 });
 
 // Product identification lookup by internal id / SKU / barcode / QR identifier.
@@ -526,9 +582,13 @@ app.get('/api/products/:id', async (req, res) => {
 app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
         const { name, category, price, rating, description, image, gallery, featured, stock,
-                sku, barcode, qr_identifier } = req.body;
+            sku, barcode, qr_identifier, active, carton_enabled, units_per_carton, carton_price } = req.body;
         if (!name || !price || !category) {
             return res.status(400).json({ error: 'Name, category and price are required' });
+        }
+        if (!Number.isFinite(Number(price)) || Number(price) <= 0) return res.status(400).json({ error: 'Price must be greater than zero' });
+        if (carton_enabled && (!Number.isInteger(Number(units_per_carton)) || Number(units_per_carton) < 2 || !Number.isFinite(Number(carton_price)) || Number(carton_price) <= 0)) {
+            return res.status(400).json({ error: 'Carton products need valid carton settings' });
         }
 
         // Duplicate-identifier guard (#6): the same physical product must not be
@@ -556,6 +616,11 @@ app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) 
             sku: sku || null,
             barcode: barcode || null,
             qr_identifier: qr_identifier || null,
+            created_by: req.user.id,
+            active: active === undefined ? 1 : (active ? 1 : 0),
+            carton_enabled: carton_enabled ? 1 : 0,
+            units_per_carton: carton_enabled ? Number(units_per_carton) : null,
+            carton_price: carton_enabled ? Number(carton_price) : null,
             created_at: new Date().toISOString()
         });
 
@@ -586,7 +651,8 @@ app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) 
 // Update product (admin & worker)
 app.put('/api/products/:id', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
-        const { name, category, price, rating, description, image, gallery, featured, stock } = req.body;
+        const { name, category, price, rating, description, image, gallery, featured, stock,
+            sku, barcode, qr_identifier, active, carton_enabled, units_per_carton, carton_price } = req.body;
         const existing = await db.getById('products', req.params.id);
         if (!existing) return res.status(404).json({ error: 'Product not found' });
 
@@ -594,17 +660,40 @@ app.put('/api/products/:id', authRequired, workerOrAdminRequired, async (req, re
         // as stock movements and kept atomic within a transaction. products.stock
         // is only a mirror of the inventory quantity.
         const newStock = stock !== undefined ? (Number(stock) || 0) : existing.stock;
+        const nextPrice = price !== undefined ? Number(price) : Number(existing.price);
+        if (!Number.isFinite(nextPrice) || nextPrice <= 0) return res.status(400).json({ error: 'Price must be greater than zero' });
+        for (const [label, value] of [['SKU', sku], ['Barcode', barcode], ['QR identifier', qr_identifier]]) {
+            if (value !== undefined && value) {
+                const inUse = await inventory.identifierInUse(value, existing.id);
+                if (inUse) return res.status(409).json({ error: label + ' is already used by another product' });
+            }
+        }
+        if (carton_enabled && (!Number.isInteger(Number(units_per_carton)) || Number(units_per_carton) < 2 || !Number.isFinite(Number(carton_price)) || Number(carton_price) <= 0)) {
+            return res.status(400).json({ error: 'Carton products need valid carton settings' });
+        }
 
         const product = await db.update('products', existing.id, {
             name: name || existing.name,
             category: category || existing.category,
-            price: price || existing.price,
+            price: nextPrice,
             rating: rating || existing.rating,
             description: description !== undefined ? description : existing.description,
             image: image || existing.image,
             gallery: gallery ? gallery : existing.gallery,
             featured: featured !== undefined ? (featured ? 1 : 0) : existing.featured,
-            stock: newStock
+            stock: newStock,
+            sku: sku !== undefined ? (sku || null) : existing.sku,
+            barcode: barcode !== undefined ? (barcode || null) : existing.barcode,
+            qr_identifier: qr_identifier !== undefined ? (qr_identifier || null) : existing.qr_identifier,
+            active: active !== undefined ? (active ? 1 : 0) : existing.active,
+            carton_enabled: carton_enabled !== undefined ? (carton_enabled ? 1 : 0) : existing.carton_enabled,
+            units_per_carton: carton_enabled ? Number(units_per_carton) : (carton_enabled === false ? null : existing.units_per_carton),
+            carton_price: carton_enabled ? Number(carton_price) : (carton_enabled === false ? null : existing.carton_price)
+        });
+
+        if (Number(existing.price) !== nextPrice) await db.insert('product_price_history', {
+            product_id: existing.id, previous_price: existing.price, new_price: nextPrice,
+            changed_by: req.user.id, changed_at: new Date().toISOString()
         });
 
         if (stock !== undefined) {
@@ -722,7 +811,7 @@ app.post('/api/admin/inventory/physical-sale-session', authRequired, workerOrAdm
                 }
                 productId = found.product.id;
             }
-            resolvedItems.push({ productId, quantity: item.quantity });
+            resolvedItems.push({ productId, quantity: item.quantity, purchaseType: item.purchaseType || item.purchase_type });
         }
 
         const result = await inventory.recordPhysicalSaleSession({
@@ -910,7 +999,7 @@ app.post('/api/pos/sales', async (req, res) => {
                 productId = found.product.id;
             }
             if (!productId) return res.status(400).json({ error: 'Each item needs productId or identifier' });
-            resolvedItems.push({ productId, quantity: item.quantity });
+            resolvedItems.push({ productId, quantity: item.quantity, purchaseType: item.purchaseType || item.purchase_type });
         }
 
         let result;
@@ -999,18 +1088,27 @@ app.post('/api/orders', authRequired, async (req, res) => {
                     const qty = Math.max(1, Math.floor(Number(item.quantity) || 1));
 
                     const prodRes = await client.query(
-                        'SELECT id, name, price FROM products WHERE id = $1',
+                        'SELECT id, name, price, active, carton_enabled, units_per_carton, carton_price FROM products WHERE id = $1',
                         [productId]
                     );
                     if (prodRes.rows.length === 0) throw httpError(400, 'Product not found: ' + productId);
                     const prod = prodRes.rows[0];
+                    if (prod.active === 0) throw httpError(409, 'Product is inactive: ' + prod.name);
+                    const purchaseType = item.purchase_type === 'carton' ? 'carton' : 'unit';
+                    if (purchaseType === 'carton' && (!prod.carton_enabled || !prod.units_per_carton || !prod.carton_price)) {
+                        throw httpError(400, 'Carton purchase is not available for "' + prod.name + '"');
+                    }
+                    const selectedQuantity = Math.max(1, Math.floor(Number(item.quantity) || 1));
+                    const inventoryQuantity = purchaseType === 'carton'
+                        ? selectedQuantity * Number(prod.units_per_carton)
+                        : selectedQuantity;
 
                     // Atomic, row-locked stock deduction. Throws if insufficient.
                     await inventory.deductStock(client, {
                         supermarketId,
                         productId: prod.id,
                         productName: prod.name,
-                        quantity: qty,
+                        quantity: inventoryQuantity,
                         movementType: inventory.MOVEMENT_TYPES.ONLINE_SALE,
                         referenceType: 'order',
                         referenceId: orderRef,
@@ -1019,8 +1117,14 @@ app.post('/api/orders', authRequired, async (req, res) => {
                     });
 
                     const unitPrice = Number(prod.price);
-                    validatedItems.push({ ...item, id: String(prod.id), name: prod.name, price: unitPrice });
-                    serverTotal += unitPrice * qty;
+                    const selectedPrice = purchaseType === 'carton' ? Number(prod.carton_price) : unitPrice;
+                    validatedItems.push({
+                        id: String(prod.id), name: prod.name, quantity: selectedQuantity,
+                        purchase_type: purchaseType, price: selectedPrice,
+                        units_per_carton: purchaseType === 'carton' ? Number(prod.units_per_carton) : null,
+                        line_total: selectedPrice * selectedQuantity
+                    });
+                    serverTotal += selectedPrice * selectedQuantity;
                 }
 
                 const orderRow = await client.query(

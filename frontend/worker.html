@@ -541,12 +541,39 @@
         body.dark-mode .admin-btn.secondary { background: #2a2a2a; color: #ddd; border-color: #444; }
 
         @media print {
-            body * { visibility: hidden; }
-            .receipt-modal, .receipt-modal * { visibility: visible; }
-            .receipt-modal { position: static; background: #fff; padding: 0; }
-            .receipt-modal__panel { box-shadow: none; max-height: none; overflow: visible; max-width: 100%; border-radius: 0; }
-            .receipt-modal__close, .receipt-actions, .receipt-modal__panel h3 { display: none !important; }
-            .receipt-print { border: none; margin: 0 auto; max-width: 300px; }
+            @page { margin: 8mm; }
+
+            /* Remove every page element from LAYOUT (not just visually hidden)
+               so the receipt is the only content — no blank leading pages. */
+            body > *:not(#receiptPreviewModal) { display: none !important; }
+
+            #receiptPreviewModal {
+                display: block !important;
+                position: static !important;
+                inset: auto !important;
+                background: #fff !important;
+                padding: 0 !important;
+                z-index: auto !important;
+            }
+            #receiptPreviewModal .receipt-modal__panel {
+                box-shadow: none !important;
+                max-height: none !important;
+                max-width: none !important;
+                overflow: visible !important;
+                border-radius: 0 !important;
+                padding: 0 !important;
+            }
+            #receiptPreviewModal .receipt-modal__close,
+            #receiptPreviewModal h3,
+            #receiptPreviewModal .sub,
+            #receiptPreviewModal .receipt-actions { display: none !important; }
+
+            .receipt-print {
+                border: none !important;
+                margin: 0 auto 8mm !important;
+                box-shadow: none !important;
+                page-break-inside: avoid;
+            }
         }
     </style>
 </head>
@@ -1036,6 +1063,7 @@ function switchWorkerTab(tabName) {
 
     if (tabName === "orders") { loadWorkerOrders(); loadWorkerPendingPayments(); }
     if (tabName === "inventory") loadWorkerInventory();
+    if (tabName === "products") renderWorkerProductList();
 }
 
 /* ===== Worker inventory tab ===== */

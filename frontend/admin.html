@@ -721,6 +721,7 @@
                 <div class="export-btns">
                     <button class="export-btn" onclick="exportProductsCSV()">📥 Export Products CSV</button>
                     <button class="export-btn" onclick="exportOrdersCSV()">📥 Export Orders CSV</button>
+                    <button class="export-btn" onclick="exportMovementsCSV()">📥 Export Stock Movements CSV</button>
                     <button class="export-btn" onclick="exportAuditCSV()">📥 Export Operations Audit</button>
                 </div>
                 <div style="overflow-x:auto;">
@@ -737,6 +738,23 @@
                         <tbody id="productReportBody">
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- History Maintenance: purge old records by date range -->
+            <div class="admin-card" style="margin-bottom:24px;">
+                <h2>🧹 History Maintenance</h2>
+                <p class="sub">Delete old records between two dates so report tables do not grow forever. This is <strong>permanent</strong> and is written to the audit log.</p>
+                <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:16px 0 0;">
+                    <label style="margin:0;">Records
+                        <select id="purge-type">
+                            <option value="movements">Stock movements</option>
+                            <option value="orders">Orders (incl. their payment records)</option>
+                        </select>
+                    </label>
+                    <label style="margin:0;">From <input type="date" id="purge-from"></label>
+                    <label style="margin:0;">To <input type="date" id="purge-to"></label>
+                    <button class="admin-btn" style="width:auto;margin:0;background:#e53935;color:#fff;border-color:#e53935;" onclick="purgeHistory()">🗑 Delete Records</button>
                 </div>
             </div>
         </div>
@@ -1170,6 +1188,29 @@ function loadSummaryReport() {
             'Completed orders: ' + t.completedOrders + ' • Cancelled orders: ' + t.cancelledOrders + ' • Average order: ₦' + Number(t.averageOrderValue).toLocaleString() + '<br><br>' +
             '<strong>Payment methods</strong><br>' + methodText + '<br><br><strong>Worker activity</strong><br>' + workers;
     }).catch(function (err) { document.getElementById('summaryReport').textContent = err.message; });
+}
+
+/* ===== History Maintenance (purge records by date range) ===== */
+function purgeHistory() {
+    var type = document.getElementById('purge-type').value;
+    var from = document.getElementById('purge-from').value;
+    var to = document.getElementById('purge-to').value;
+    if (!from || !to) { showToast('Choose a From and To date', 'error'); return; }
+    if (from > to) { showToast('"From" must be on or before "To"', 'error'); return; }
+
+    var label = type === 'orders' ? 'orders (and their payment records)' : 'stock movements';
+    if (!confirm('Permanently delete all ' + label + ' between ' + from + ' and ' + to + '?\n\nThis cannot be undone.')) return;
+
+    apiPurgeHistory(type, from, to).then(function (result) {
+        showToast(result.message || 'Records deleted', 'success');
+        // Refresh anything that may have been affected.
+        loadAdminStats();
+        if (document.getElementById('tab-orders').style.display !== 'none') loadOrders();
+        if (document.getElementById('tab-inventory').style.display !== 'none') loadAdminInventory();
+        loadSummaryReport();
+    }).catch(function (err) {
+        showToast(err.message || 'Could not delete the records', 'error');
+    });
 }
 
 /* ===== Workers ===== */

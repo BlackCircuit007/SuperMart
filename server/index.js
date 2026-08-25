@@ -2411,6 +2411,99 @@ app.get('/api/admin/export/products', authRequired, adminRequired, async (req, r
     }
 });
 
+// Export stock movements as CSV — part of the reporting suite.
+app.get('/api/admin/export/movements', authRequired, adminRequired, async (req, res) => {
+    try {
+        const rows = await pool.query(
+            `SELECT sm.created_at, sm.product_id, p.name AS product_name,
+                    sm.change_qty, sm.qty_before, sm.qty_after, sm.movement_type,
+                    sm.reference_type, sm.reference_id, sm.note
+             FROM stock_movements sm
+             LEFT JOIN products p ON p.id = sm.product_id
+             ORDER BY sm.created_at DESC, sm.id DESC`);
+
+        const csvRows = [[
+            'Date', 'Product', 'Change', 'Qty Before', 'Qty After',
+            'Movement Type', 'Reference Type', 'Reference ID', 'Note'
+        ]];
+
+        rows.rows.forEach(m => {
+            csvRows.push([
+                m.created_at,
+                m.product_name || ('#' + m.product_id),
+                m.change_qty,
+                m.qty_before,
+                m.qty_after,
+                m.movement_type,
+                m.reference_type || '',
+                m.reference_id || '',
+                m.note || ''
+            ]);
+        });
+
+        const csv = csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=stock-movements.csv');
+        res.send(csv);
+    } catch (err) {
+        console.error('Export movements error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Purge old history records by date range so report tables do not grow forever.
+// Admin-only, irreversible, and always written to the audit log.
+// Body: { type: 'movements' | 'orders', from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
+app.post('/api/admin/history/purge', authRequired, adminRequired, async (req, res) => {
+    try {
+        const { type, from, to } = req.body;
+        if (!['movements', 'orders'].includes(type)) {
+            return res.status(400).json({ error: "type must be 'movements' or 'orders'" });
+        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to || ''))) {
+            return res.status(400).json({ error: 'from and to must be YYYY-MM-DD' });
+        }
+
+        // created_at is ISO-8601 text, which compares correctly as a string.
+        const start = from + 'T00:00:00.000Z';
+        const end = to + 'T23:59:59.999Z';
+
+        let deleted = 0;
+        if (type === 'movements') {
+            const result = await pool.query(
+                'DELETE FROM stock_movements WHERE created_at >= $1 AND created_at <= $2',
+                [start, end]);
+            deleted = result.rowCount || 0;
+        } else {
+            // Collect the order refs first so their payment ledger rows can be
+            // removed too, keeping pending-payment lists consistent.
+            const refs = await pool.query(
+                'SELECT order_ref FROM orders WHERE created_at >= $1 AND created_at <= $2',
+                [start, end]);
+            const orderRefs = refs.rows.map(r => r.order_ref);
+
+            if (orderRefs.length > 0) {
+                await pool.query(
+                    'DELETE FROM payment_verifications WHERE order_ref = ANY($1)',
+                    [orderRefs]);
+                const result = await pool.query(
+                    'DELETE FROM orders WHERE created_at >= $1 AND created_at <= $2',
+                    [start, end]);
+                deleted = result.rowCount || 0;
+            }
+        }
+
+        await writeAudit(req, 'HISTORY_PURGED', type, null, null, 'deleted',
+            { from, to, deleted, by: req.user.email });
+
+        res.json({ message: 'Purged ' + deleted + ' ' + type + ' record(s)', deleted });
+    } catch (err) {
+        console.error('History purge error:', err);
+        res.status(500).json({ error: 'Server error purging history' });
+    }
+});
+
 // ===== CART ROUTES =====
 
 // Save cart (server-side)

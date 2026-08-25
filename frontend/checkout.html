@@ -355,7 +355,11 @@
                     });
                 } catch (err) {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
-                    showToast(err.message || "Could not start the payment. Your order is saved as PENDING.", "error");
+                    // Missing/unconfigured Flutterwave keys return 503 from the server.
+                    var flwMsg = err.status === 503
+                        ? "Online card payment is not configured yet (Flutterwave keys missing). Your order is saved as PENDING — pay by transfer or cash instead."
+                        : (err.message || "Could not start the payment. Your order is saved as PENDING.");
+                    showToast(flwMsg, "error");
                 }
             }
 

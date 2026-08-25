@@ -375,6 +375,20 @@ function exportAuditCSV() {
     window.open(API_BASE + '/api/admin/export/audit?token=' + token, '_blank');
 }
 
+function exportMovementsCSV() {
+    const token = getToken();
+    if (!token) return;
+    window.open(API_BASE + '/api/admin/export/movements?token=' + token, '_blank');
+}
+
+// Purge old history records in a date range (admin only, irreversible).
+async function apiPurgeHistory(type, from, to) {
+    return apiRequest('/api/admin/history/purge', {
+        method: 'POST',
+        body: JSON.stringify({ type, from, to })
+    });
+}
+
 // ===== Auth UI Update =====
 function updateAuthUI() {
     const user = getCurrentUser();

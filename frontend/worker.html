@@ -890,6 +890,10 @@ function confirmWorkerDeleteProduct(id) {
 
 /* ===== Tab switching ===== */
 function switchWorkerTab(tabName) {
+    var worker = getCurrentUser() || {};
+    var workerType = String(worker.worker_type || 'UNIVERSAL').toUpperCase();
+    if (tabName === 'inventory' && workerType === 'ONLINE') { showToast('This worker account cannot access physical POS', 'error'); return; }
+    if (tabName === 'orders' && workerType === 'PHYSICAL') { showToast('This worker account cannot access online orders', 'error'); return; }
     document.querySelectorAll(".admin-tab").forEach(function (tab) {
         tab.classList.remove("active");
     });
@@ -1104,11 +1108,17 @@ async function scanWorkerProduct() {
     if (!identifier) { showToast("Scan or type an identifier", "error"); return; }
 
     try {
-        var found = await apiRequest('/api/products/lookup?identifier=' + encodeURIComponent(identifier));
+        var found;
+        try {
+            found = await apiGetProductByBarcode(identifier);
+        } catch (barcodeErr) {
+            if (barcodeErr.status !== 404) throw barcodeErr;
+            found = await apiRequest('/api/products/lookup?identifier=' + encodeURIComponent(identifier));
+        }
         var p = found.product;
         if (!found.inStock) {
             if (status) status.textContent = p.name + " is OUT OF STOCK.";
-            showToast(p.name + " is out of stock", "error");
+            showToast(p.name + " — Out of stock", "error");
             input.value = "";
             return;
         }
@@ -1118,8 +1128,9 @@ async function scanWorkerProduct() {
         input.focus();
         renderWorkerSaleSession();
     } catch (err) {
-        if (status) status.textContent = err.message || "Identifier not recognised";
-        showToast(err.message || "Unknown identifier", "error");
+        var message = err.status === 404 ? "Product not found for barcode: " + identifier : (err.message || "Identifier not recognised");
+        if (status) status.textContent = message;
+        showToast(message, "error");
     }
 }
 
@@ -1265,7 +1276,7 @@ function showWorkerPaymentNotification(payload, title, color) {
 
 /* ===== Load worker stats ===== */
 function loadWorkerStats() {
-    apiGetAdminStats().then(function (data) {
+    apiGetWorkerStats().then(function (data) {
         var s = data.stats;
         document.getElementById("statProducts").textContent = s.totalProducts;
         document.getElementById("statOrders").textContent = s.totalOrders;
@@ -1293,6 +1304,7 @@ function loadWorkerOrders() {
             var paymentStatusLabel = order.payment_status === 'verified' ? 'PAID' : (order.payment_status || 'pending').toUpperCase();
             var statusColor = order.status === 'completed' ? '#4caf50' : order.status === 'cancelled' ? '#e53935' : '#ff7a00';
             var action = '<button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" data-oid="' + order.id + '" onclick="openWorkerOrderUpdate(this.dataset.oid)">Update</button>';
+            if (!order.assigned_worker_id) action += ' <button class="admin-btn" style="width:auto;padding:6px 14px;font-size:12px;" data-oid="' + order.id + '" onclick="assignWorkerOrder(this.dataset.oid)">Take responsibility</button>';
             if (order.payment_method === 'cash' && order.payment_status === 'pending') {
                 action += ' <button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" data-oid="' + order.id + '" onclick="collectWorkerCash(this.dataset.oid)">Collect cash</button>';
             }
@@ -1362,6 +1374,10 @@ function collectWorkerCash(id) {
     }).catch(function (err) { showToast(err.message || 'Could not collect cash', 'error'); });
 }
 
+function assignWorkerOrder(id) {
+    apiAssignOrder(id).then(function () { showToast('Order assigned to you', 'success'); loadWorkerOrders(); }).catch(function (err) { showToast(err.message || 'Could not assign order', 'error'); });
+}
+
 /* ===== Open order update for worker ===== */
 function openWorkerOrderUpdate(orderId) {
     var newStatus = prompt("Enter new order status (pending, processing, shipped, delivered, cancelled):\nLeave blank to cancel", "");
@@ -1422,6 +1438,11 @@ window.addEventListener("DOMContentLoaded", function () {
             logout();
         };
         document.getElementById("workerInfo").textContent = "Logged in as " + currentUser.name;
+        var workerType = String(currentUser.worker_type || 'UNIVERSAL').toUpperCase();
+        document.querySelector('[data-tab="products"]').style.display = 'none';
+        if (workerType === 'ONLINE') document.querySelector('[data-tab="inventory"]').style.display = 'none';
+        if (workerType === 'PHYSICAL') document.querySelector('[data-tab="orders"]').style.display = 'none';
+        switchWorkerTab(workerType === 'PHYSICAL' ? 'inventory' : 'orders');
         renderWorkerProductList();
         loadWorkerStats();
 

@@ -700,7 +700,14 @@
                 <div class="export-btns">
                     <button class="export-btn" onclick="exportProductsCSV()">📥 Export Products CSV</button>
                     <button class="export-btn" onclick="exportOrdersCSV()">📥 Export Orders CSV</button>
+                    <button class="export-btn" onclick="exportAuditCSV()">📥 Export Operations Audit</button>
                 </div>
+                <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:16px 0;">
+                    <label style="margin:0;">From <input type="date" id="report-from"></label>
+                    <label style="margin:0;">To <input type="date" id="report-to"></label>
+                    <button class="admin-btn green" style="width:auto;margin:0;" onclick="loadSummaryReport()">Run report</button>
+                </div>
+                <div id="summaryReport" class="sub">Choose a date range to view operational totals.</div>
                 <div style="overflow-x:auto;">
                     <table class="report-table" id="productReportTable">
                         <thead>
@@ -731,6 +738,9 @@
 
                     <label>Worker Email</label>
                     <input type="email" id="worker-email" placeholder="worker@email.com" autocomplete="off">
+
+                    <label>Worker Account Type</label>
+                    <select id="worker-type"><option value="ONLINE">ONLINE</option><option value="PHYSICAL">PHYSICAL</option><option value="UNIVERSAL" selected>UNIVERSAL</option></select>
 
                     <button class="admin-btn green" onclick="addWorker()">➕ Add Worker</button>
                 </div>
@@ -981,7 +991,7 @@ function switchAdminTab(tabName) {
     });
     document.getElementById("tab-" + tabName).style.display = "block";
 
-    if (tabName === "reports") loadReports();
+    if (tabName === "reports") { loadReports(); loadSummaryReport(); }
     if (tabName === "workers") loadWorkers();
     if (tabName === "orders") loadOrders();
     if (tabName === "inventory") loadAdminInventory();
@@ -1062,20 +1072,50 @@ function loadReports() {
     });
 }
 
+function loadSummaryReport() {
+    var today = new Date().toISOString().slice(0, 10);
+    var fromInput = document.getElementById('report-from');
+    var toInput = document.getElementById('report-to');
+    if (fromInput && !fromInput.value) fromInput.value = today;
+    if (toInput && !toInput.value) toInput.value = today;
+    var from = fromInput ? fromInput.value : today;
+    var to = toInput ? toInput.value : today;
+    apiGetAdminReportSummary(from, to).then(function (data) {
+        var t = data.totals;
+        var methodText = Object.keys(data.byPaymentMethod).map(function (method) {
+            var row = data.byPaymentMethod[method];
+            return method + ': ' + row.orders + ' orders / ₦' + Number(row.total).toLocaleString() + ' / paid ₦' + Number(row.paid).toLocaleString();
+        }).join('<br>');
+        var workers = Object.keys(data.workerActivity).map(function (id) {
+            var row = data.workerActivity[id];
+            return row.worker_name + ' (' + row.worker_type + '): ' + row.actions + ' actions';
+        }).join('<br>') || 'No worker activity recorded.';
+        document.getElementById('summaryReport').innerHTML =
+            '<strong>Report: ' + data.range.from + ' to ' + data.range.to + '</strong><br>' +
+            'Online orders: ' + t.onlineOrders + ' • Physical sales: ' + t.physicalSales + '<br>' +
+            'Online revenue: ₦' + Number(t.onlineRevenue).toLocaleString() + ' • Physical revenue: ₦' + Number(t.physicalRevenue).toLocaleString() + '<br>' +
+            'Paid: ₦' + Number(t.paid).toLocaleString() + ' • Pending payments: ' + t.pendingPayments + ' • Failed payments: ' + t.failedPayments + '<br>' +
+            'Completed orders: ' + t.completedOrders + ' • Cancelled orders: ' + t.cancelledOrders + ' • Average order: ₦' + Number(t.averageOrderValue).toLocaleString() + '<br><br>' +
+            '<strong>Payment methods</strong><br>' + methodText + '<br><br><strong>Worker activity</strong><br>' + workers;
+    }).catch(function (err) { document.getElementById('summaryReport').textContent = err.message; });
+}
+
 /* ===== Workers ===== */
 function addWorker() {
     var name = document.getElementById("worker-name").value.trim();
     var email = document.getElementById("worker-email").value.trim();
+    var workerType = document.getElementById("worker-type").value;
 
     if (!name || !email) {
         showToast("Please enter worker name and email", "error");
         return;
     }
 
-    apiAddWorker(name, email).then(function (data) {
+    apiAddWorker(name, email, workerType).then(function (data) {
         showToast("Worker added! Login credentials sent to their email.", "success");
         document.getElementById("worker-name").value = "";
         document.getElementById("worker-email").value = "";
+        document.getElementById("worker-type").value = "UNIVERSAL";
         loadWorkers();
     }).catch(function (err) {
         showToast(err.message || "Failed to add worker", "error");
@@ -1098,8 +1138,9 @@ function loadWorkers() {
             var initials = w.name.split(" ").map(function (n) { return n[0]; }).join("").slice(0, 2).toUpperCase();
             item.innerHTML =
                 '<div class="avatar">' + initials + '</div>' +
-                '<div class="info"><h4>' + w.name + '</h4><p>' + w.email + '</p></div>' +
-                '<button class="delete-btn" data-wid="' + w.id + '" onclick="deleteWorker(this.dataset.wid)">🗑 Remove</button>';
+                '<div class="info"><h4>' + w.name + '</h4><p>' + w.email + ' • ' + (w.worker_type || 'UNIVERSAL') + ' • ' + (w.is_active ? 'ACTIVE' : 'INACTIVE') + '</p></div>' +
+                '<select data-wid="' + w.id + '" onchange="changeWorkerType(this.dataset.wid, this.value)"><option value="ONLINE" ' + (w.worker_type === 'ONLINE' ? 'selected' : '') + '>ONLINE</option><option value="PHYSICAL" ' + (w.worker_type === 'PHYSICAL' ? 'selected' : '') + '>PHYSICAL</option><option value="UNIVERSAL" ' + ((!w.worker_type || w.worker_type === 'UNIVERSAL') ? 'selected' : '') + '>UNIVERSAL</option></select>' +
+                '<button class="delete-btn" data-wid="' + w.id + '" onclick="toggleWorker(this.dataset.wid, ' + (w.is_active ? 'false' : 'true') + ')">' + (w.is_active ? 'Deactivate' : 'Reactivate') + '</button>';
             container.appendChild(item);
         });
     }).catch(function (err) {
@@ -1116,6 +1157,14 @@ function deleteWorker(id) {
             showToast(err.message || "Failed to remove worker", "error");
         });
     }
+}
+
+function changeWorkerType(id, workerType) {
+    apiUpdateWorker(id, { worker_type: workerType }).then(function () { showToast('Worker type updated', 'success'); loadWorkers(); }).catch(function (err) { showToast(err.message || 'Failed to update worker', 'error'); });
+}
+
+function toggleWorker(id, active) {
+    apiUpdateWorker(id, { is_active: active }).then(function () { showToast(active ? 'Worker reactivated' : 'Worker deactivated', 'success'); loadWorkers(); }).catch(function (err) { showToast(err.message || 'Failed to update worker', 'error'); });
 }
 
 /* ===== Orders ===== */

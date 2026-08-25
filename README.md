@@ -1,138 +1,179 @@
-# TriumphsMart — Skin Care & Provisions Store
+# LordTempsMart
 
-A full-stack e-commerce store for skin care and provisions with a real backend database, email verification, admin panel with reports and CSV export, and worker management.
+LordTempsMart is a supermarket shopping, ordering, inventory, payment, and operations platform. Customers shop online, staff operate online orders or physical POS sales, and administrators manage workers, products, reports, and exports.
 
-## Features
+## Overview
 
-### Core Features
-- **Responsive Design** — Fully responsive across all device sizes (mobile, tablet, desktop)
-- **Skin Care + Provisions Only** — Shop is focused on premium skin care products and quality provisions
-- **Real Database** — All data stored in CockroachDB (PostgreSQL-compatible) on the server
-- **Admin Panel** — Login with `admin@triumphsmart.com` / `admin123`
-  - Add products with **5 image upload slots**
-  - Name, description, price, rating, category, stock, and featured flag
-  - Remove any product with one click
-  - **Reports tab** — See how many times each product was ordered
-  - **CSV Export** — Export orders and product reports as CSV
-  - **Worker Management** — Add workers who receive generated login codes via email
-  - **Order Management** — View all customer orders
-- **User Dashboard** — Registered users get a personal dashboard showing:
-  - Their profile
-  - Cart items and cart value
-  - Order history with order references
-- **User Authentication** — Register with email verification (code sent to email, NOT shown on screen)
-- **Worker Authentication** — Workers log in with a generated login code sent to their email
-- **Shopping Cart** — Add to cart, change quantities, remove items, server-side cart storage
-- **Quick View Modal** — Preview product details without leaving the page
-- **Search & Filters** — Real-time search with debounce, category/price/rating filters
-- **Order Checkout** — Place orders with shipping info and payment method
-- **Email Notifications** — 
-  - Verification code sent to email on registration
-  - Order confirmation sent to customer
-  - Cash on Delivery notification sent to owner
-  - Payment verification email with **Verify/Reject buttons** sent to owner
-  - Worker credentials sent to worker's email
-- **Toast Notifications** — Friendly feedback for all actions
+The application is a Node.js and Express web app backed by CockroachDB/PostgreSQL. The browser never owns inventory or payment truth. The server validates orders and payments, while `server/inventory.js` remains the single source of truth for stock reservations, physical sales, stock movements, and cancellation restores.
 
-## Pages
+## Architecture
 
-| Page | Description |
-|---|---|
-| `index.html` | Home page with hero, categories, and featured picks |
-| `products.html` | Full catalog with search, category/price/rating filters |
-| `cart.html` | Shopping cart with quantity controls |
-| `checkout.html` | Shipping info, payment method, order summary |
-| `finally.html` | Order confirmation with reference number |
-| `login.html` | Login page (also the admin login entry) |
-| `register.html` | Registration with email verification |
-| `verify.html` | Email verification code entry |
-| `dashboard.html` | User dashboard: profile, cart, orders |
-| `admin.html` | Admin panel: products, reports, workers, orders |
-| `worker.html` | Worker portal: products and orders management |
-
-## Admin Access
-
-Email: `admin@triumphsmart.com`
-Password: `admin123`
-
-## Worker Access
-
-Workers are added by the admin. Each worker receives:
-- A **username** (generated from their name)
-- A **login code** (e.g., `WK8F3K2A123`)
-
-They log in via the worker login section on the login page.
-
-## How to Run
-
-1. Install dependencies:
-```bash
-npm install
+```text
+Customer or Worker Browser
+        |
+frontend/*.html + frontend/js/*.js
+        |
+Node.js / Express API (server/index.js)
+        |
+        +--> CockroachDB/PostgreSQL (server/db.js)
+        +--> Inventory service (server/inventory.js)
+        +--> Flutterwave server verification
+        +--> SSE broadcaster (server/events.js)
+        +--> Brevo email (server/email.js)
 ```
 
-2. Start the server:
-```bash
+## Technology Stack
+
+- Node.js and Express
+- CockroachDB/PostgreSQL with `pg`
+- JWT authentication and `bcryptjs` password hashing
+- Server-Sent Events for live worker notifications
+- Flutterwave hosted checkout and server-side verification
+- Brevo HTTP API for email
+- Plain HTML, CSS, and JavaScript frontend
+- Electron desktop wrapper
+
+## Project Structure
+
+- `frontend/`: customer, checkout, dashboard, worker, admin, and PWA pages.
+- `frontend/js/api.js`: authenticated API client, cart helpers, exports, and SSE client.
+- `frontend/css/style.css`: shared responsive styles.
+- `server/index.js`: authentication, orders, payments, workers, reports, and exports.
+- `server/inventory.js`: atomic inventory and stock movement operations.
+- `server/db.js`: additive schema setup and migrations.
+- `server/events.js`: in-memory SSE event broadcaster.
+- `server/email.js`: Brevo transactional email integration.
+- `electron/`: packaged desktop application wrapper.
+
+## Installation and Running
+
+```powershell
+npm install
 npm start
 ```
 
-3. Open your browser at:
+Open `http://localhost:3000`.
+
+Development mode and icon generation:
+
+```powershell
+npm run dev
+npm run icons
 ```
-http://localhost:3000
+
+Build the Electron directory package with `npm run dist:dir`.
+
+## Environment Variables
+
+Copy `.env.example` to `.env`. Never commit real secrets.
+
+```text
+PORT=3000
+DATABASE_URL=postgresql://user:password@host:port/database
+JWT_SECRET=replace-with-a-long-random-secret
 ```
 
-## Email Configuration
+Email:
 
-The app sends all transactional emails (verification codes, order confirmations, payment notices, worker credentials) via the **Brevo HTTP API** over outbound HTTPS — no SMTP ports and no EmailJS.
-
-Configure in your deployment environment:
-
-```
-BREVO_API_KEY=your_brevo_api_key
-BREVO_SENDER_EMAIL=a-sender-verified-in-brevo@example.com
+```text
+BREVO_API_KEY=your-brevo-api-key
+BREVO_SENDER_EMAIL=verified-sender@example.com
 BREVO_SENDER_NAME=LordTempsMart
-OWNER_EMAIL=your-owner-email@example.com
-```
-
-### Deployment email checklist
-
-Your hosting provider does **not** automatically use the `.env` file on your computer. In the provider's Environment Variables / Secrets settings, add these exact values and redeploy:
-
-```
-BREVO_API_KEY=your_brevo_api_key
-BREVO_SENDER_EMAIL=a-sender-verified-in-brevo@example.com
-BREVO_SENDER_NAME=LordTempsMart
-OWNER_EMAIL=your-owner-email@example.com
+OWNER_EMAIL=owner@example.com
 BASE_URL=https://your-public-domain.example
-DATABASE_URL=your-cockroachdb-connection-string
-JWT_SECRET=a-long-random-secret
 ```
 
-> **Important:** `BASE_URL` must be your public deployed URL (e.g. `https://your-app.onrender.com`). All clickable links inside emails (verify & login magic links, payment verify/reject buttons) are built from it. If it is left unset, the app auto-detects on Render via `RENDER_EXTERNAL_URL`, then falls back to `http://localhost:PORT` for local development only.
+Real bank transfer details are optional, but all three are required to enable transfer checkout:
 
-After deployment, open `/api/health`; `emailConfigured` must be `true`. The deployment log will report whether Brevo configuration is available.
-
-## Database
-
-All data is stored in CockroachDB (PostgreSQL-compatible). Configure the connection string in `.env`:
-
-```
-DATABASE_URL=postgresql://...
+```text
+BANK_NAME=
+BANK_ACCOUNT_NAME=
+BANK_ACCOUNT_NUMBER=
 ```
 
-Tables include:
-- Users (buyers, workers, admin)
-- Products
-- Orders
-- Verification codes
-- Worker login codes
-- Payment verifications
-- Carts
+Flutterwave requires:
 
-## Technologies
+```text
+FLW_PUBLIC_KEY=FLWPUBK_TEST-your-public-key
+FLW_SECRET_KEY=FLWSECK_TEST-your-secret-key
+FLW_WEBHOOK_SECRET_HASH=your-webhook-secret-hash
+```
 
-- **Backend**: Node.js, Express
-- **Database**: CockroachDB (PostgreSQL-compatible)
-- **Email**: Brevo HTTP API (outbound HTTPS)
-- **Auth**: JWT (JSON Web Tokens)
-- **Frontend**: HTML5 / CSS3 / JavaScript (ES6)
-- **Security**: bcrypt password hashing
+`FLW_SECRET_KEY` is server-only and must never be placed in frontend code.
+
+## Database Setup
+
+Starting the server runs `db.init()`, which creates missing tables and applies additive migrations. Existing products, nullable barcodes, orders, payments, workers, inventory, stock movements, and audit history are preserved.
+
+The schema includes users, products, optional unique barcodes, orders, carts, worker codes, payment verifications, inventory, stock movements, physical sales, POS idempotency records, integration logs, assignments, and audit logs.
+
+## Customer Workflow
+
+Customers browse/search products, add items to the server-backed cart, enter delivery details, and choose Cash on Delivery, Bank Transfer, or Flutterwave. The server validates identity, prices, quantities, payment method, and available stock before creating an order.
+
+Online orders reserve stock atomically through the existing inventory service. Opening checkout, submitting transfer proof, or initializing Flutterwave does not create an additional inventory deduction.
+
+## Worker System
+
+- `ONLINE`: customer orders, delivery information, COD collection, transfer verification, and online order status.
+- `PHYSICAL`: barcode/name lookup, physical POS sales, and inventory operations required by POS.
+- `UNIVERSAL`: both online and physical operations.
+
+Worker capabilities are enforced on the server. Admins choose worker types and can activate/deactivate workers. Deactivation is soft, so historical IDs, names, assignments, actions, and reports remain available.
+
+## POS and Barcode
+
+POS supports product-name search and barcode scanning. USB/Bluetooth scanners can type into the barcode field and press Enter. Barcode lookup resolves to the internal product ID before the existing physical-sale inventory flow runs.
+
+- `product.id` is the internal database identifier.
+- `product.barcode` is an optional unique scanning identifier.
+- Empty barcodes are allowed and duplicate barcodes are rejected.
+- Unknown or out-of-stock barcodes are not added.
+- Scanning does not deduct stock; Complete Sale does.
+
+## Payments
+
+- Cash on Delivery: order starts `pending`; an authenticated ONLINE or UNIVERSAL worker collects cash and changes payment to `verified`.
+- Bank Transfer: order and verification remain `pending` until a worker verifies or rejects the submitted reference/details. Rejection changes payment to `failed` and restores reserved stock through the existing inventory service.
+- Flutterwave: the server initializes the official hosted checkout and verifies transaction ID, reference, amount, currency, and status. Webhooks are signature-checked and idempotent.
+
+The existing stored values are `pending`, `verified`, and `failed`; screens display pending, paid, and failed labels.
+
+## Inventory and Notifications
+
+`server/inventory.js` locks inventory rows in transactions, prevents negative stock, records movements, mirrors the legacy product stock field, and restores cancelled/failed reservations exactly once.
+
+`server/events.js` broadcasts SSE events. Online events reach ONLINE and UNIVERSAL workers; physical events reach PHYSICAL and UNIVERSAL workers. The database remains the durable source of truth, so dashboards reload current state after reconnecting.
+
+## Admin, Reporting, and Export
+
+Admins manage products, barcodes, workers, worker types, activation state, orders, inventory, reports, and exports. Reports include product/order data, daily inventory reports, date-range summaries, payment/status breakdowns, online versus physical totals, averages, daily trends, and worker activity. CSV exports are available for orders, products, and the operations audit log.
+
+## Security
+
+JWT authentication, bcrypt password hashing, server-side worker capability checks, admin-only reporting/product routes, parameterized SQL, server-side payment verification, conditional payment transitions, transaction-locked inventory, and authenticated actor identity protect the main workflows. Flutterwave secrets are never returned to the browser.
+
+## Testing
+
+There is currently no automated test suite configured in `package.json`. Available checks are:
+
+```powershell
+node --check server/index.js
+node --check server/db.js
+node --check server/events.js
+
+```
+
+A release test should cover customer checkout, all payment methods, duplicate payment actions, worker permissions, barcode scanning, POS completion, cancellation restoration, SSE reconnects, reports, exports, and layouts at 320px, 390px, 768px, 1024px, 1280px, and 1440px or wider.
+
+## Production Configuration
+
+Use a reachable database host, a strong unique JWT secret, a public HTTPS `BASE_URL`, real bank details before enabling transfer, valid Flutterwave keys, and a public `/api/webhooks/flutterwave` URL. Confirm `/api/health` after deployment.
+
+## Known Limitations
+
+- SSE is in-memory and only reaches clients connected to the same server process; multi-instance deployments need a shared event broker.
+- Flutterwave live testing requires provider credentials and a public webhook URL.
+- Transfer proof stores a reference, notes, and optional proof URL; binary upload storage is not implemented.
+- No automated test suite is currently included.
+- Local database-backed tests require network/DNS access to the configured database host.

@@ -82,6 +82,14 @@ function publish(event, payload) {
     const scopeId = (!payload || typeof payload !== 'object') ? null : String(payload.supermarketId || '');
     for (const client of Array.from(clients)) {
         if (!client.alive) continue;
+        if (client.staff && client.workerType && client.workerType !== 'UNIVERSAL') {
+            const onlineEvent = [EVENT_TYPES.ONLINE_ORDER_CREATED, EVENT_TYPES.PAYMENT_CONFIRMED,
+                EVENT_TYPES.PAYMENT_VERIFICATION_SUBMITTED, EVENT_TYPES.PAYMENT_FAILED,
+                EVENT_TYPES.COD_PAYMENT_COLLECTED].includes(event);
+            const physicalEvent = [EVENT_TYPES.PHYSICAL_SALE_RECORDED, EVENT_TYPES.STOCK_CHANGED,
+                EVENT_TYPES.PRODUCT_OUT_OF_STOCK, EVENT_TYPES.PRODUCT_BACK_IN_STOCK].includes(event);
+            if ((onlineEvent && client.workerType !== 'ONLINE') || (physicalEvent && client.workerType !== 'PHYSICAL')) continue;
+        }
         // Staff streams are scoped: worker of store A never sees store B events.
         if (scopeId && client.supermarketId && String(client.supermarketId) !== scopeId) continue;
         try {

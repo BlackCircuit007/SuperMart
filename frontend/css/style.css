@@ -2443,6 +2443,23 @@ body.dark-mode .payment-modal input[type="number"]{
     font-size: 14px;
 }
 
+.payment-modal textarea {
+    width: 100%;
+    min-height: 72px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--c-border);
+    margin-top: 6px;
+    resize: vertical;
+    background: var(--c-card-bg);
+    color: var(--c-text);
+}
+
+.report-table td,
+.report-table th {
+    overflow-wrap: anywhere;
+}
+
 .pos-receipt {
     color: #16803c;
     font-weight: 700;
@@ -2463,6 +2480,11 @@ body.dark-mode .payment-modal input[type="number"]{
 .pos-qty-btn:hover { border-color: var(--c-primary); color: var(--c-primary); }
 
 @media (max-width: 600px) {
+    .admin-layout { grid-template-columns: 1fr !important; }
+    .admin-card,
+    .admin-card2 { min-width: 0; padding: 16px; }
+    .admin-product-item { flex-wrap: wrap; }
+    .payment-modal__panel { width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow-y: auto; }
     .pos-qty-btn { width: 28px; height: 28px; }
     #worker-sale-session > div { flex-wrap: wrap; }
     #worker-sale-session > div > div:first-child { flex-basis: 100%; }

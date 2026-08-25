@@ -1,6 +1,6 @@
 {
   "name": "lordtempsmart",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "LordTempsMart - Skin Care & Provisions Store with real database backend",
   "main": "electron/main.js",
   "author": "LordTempsMart",

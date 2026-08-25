@@ -76,6 +76,11 @@ async function createTables() {
         await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_provider TEXT`);
         await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_transaction_id TEXT`);
         await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_notes TEXT`);
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_worker_id TEXT`);
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_worker_name TEXT`);
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_worker_type TEXT`);
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_at TEXT`);
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS completed_at TEXT`);
 
         // Verification codes table
         await client.query(`
@@ -129,6 +134,9 @@ async function createTables() {
         `);
         await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS payment_notes TEXT`);
         await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS proof_url TEXT`);
+        await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS processed_by TEXT`);
+        await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS processed_by_name TEXT`);
+        await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS processed_at TEXT`);
 
         // Carts table
         await client.query(`
@@ -262,6 +270,24 @@ async function createTables() {
                 supermarket_id INTEGER,
                 reference TEXT,
                 detail TEXT,
+                created_at TEXT NOT NULL
+            )
+        `);
+
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS worker_type TEXT NOT NULL DEFAULT 'UNIVERSAL'`);
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1`);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                actor_user_id TEXT,
+                actor_name TEXT,
+                actor_worker_type TEXT,
+                action TEXT NOT NULL,
+                target_type TEXT,
+                target_id TEXT,
+                previous_status TEXT,
+                new_status TEXT,
+                details TEXT,
                 created_at TEXT NOT NULL
             )
         `);

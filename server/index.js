@@ -49,6 +49,35 @@ function workerOrAdminRequired(req, res, next) {
     next();
 }
 
+function workerCapability(capability) {
+    return async function (req, res, next) {
+        if (req.user && req.user.role === 'admin') return next();
+        if (!req.user || req.user.role !== 'worker') return res.status(403).json({ error: 'Worker access required' });
+        try {
+            const worker = await db.getById('users', req.user.id);
+            const type = String(worker && worker.worker_type || 'UNIVERSAL').toUpperCase();
+            if (!worker || Number(worker.is_active) === 0) return res.status(403).json({ error: 'Worker account is inactive' });
+            if (type !== 'UNIVERSAL' && type !== capability) return res.status(403).json({ error: capability + ' worker access required' });
+            req.worker = worker;
+            next();
+        } catch (err) { res.status(500).json({ error: 'Could not validate worker permissions' }); }
+    };
+}
+
+async function writeAudit(req, action, targetType, targetId, previousStatus, newStatus, details) {
+    const actor = req.worker || (req.user && await db.getById('users', req.user.id));
+    try {
+        await db.insert('audit_logs', {
+            actor_user_id: actor ? String(actor.id) : null,
+            actor_name: actor ? actor.name : null,
+            actor_worker_type: actor ? actor.worker_type : null,
+            action, target_type: targetType || null, target_id: targetId != null ? String(targetId) : null,
+            previous_status: previousStatus || null, new_status: newStatus || null,
+            details: details ? JSON.stringify(details) : null, created_at: new Date().toISOString()
+        });
+    } catch (err) { console.error('Audit log error:', err.message); }
+}
+
 // ===== Helper functions =====
 // Send email in the background without blocking the response.
 // Prevents request failures when the email provider is slow or unreachable.
@@ -81,7 +110,7 @@ function generateUsername(name) {
 
 function createSessionToken(user) {
     return jwt.sign(
-        { id: user.id, email: user.email, name: user.name, role: user.role },
+        { id: user.id, email: user.email, name: user.name, role: user.role, worker_type: user.worker_type || null },
         JWT_SECRET,
         { expiresIn: '7d' }
     );
@@ -373,7 +402,7 @@ app.post('/api/auth/email-login', async (req, res) => {
         res.json({
             message: isVerifyLink ? 'Account verified and signed in!' : 'Signed in successfully',
             token: createSessionToken(user),
-            user: { id: user.id, name: user.name, email: user.email, role: user.role }
+            user: { id: user.id, name: user.name, email: user.email, role: user.role, worker_type: user.worker_type || 'UNIVERSAL' }
         });
     } catch (err) {
         if (err.name === 'TokenExpiredError') {
@@ -402,7 +431,7 @@ app.post('/api/login', async (req, res) => {
             }
 
             const user = await db.getById('users', workerCode.worker_id);
-            if (!user || user.role !== 'worker') {
+            if (!user || user.role !== 'worker' || Number(user.is_active) === 0) {
                 return res.status(400).json({ error: 'Invalid login code' });
             }
             const token = createSessionToken(user);
@@ -415,6 +444,7 @@ app.post('/api/login', async (req, res) => {
                     name: user.name,
                     email: user.email,
                     role: user.role
+                    , worker_type: user.worker_type || 'UNIVERSAL'
                 }
             });
         }
@@ -428,6 +458,7 @@ app.post('/api/login', async (req, res) => {
         if (!user) {
             return res.status(400).json({ error: 'Invalid credentials' });
         }
+        if (user.role === 'worker' && Number(user.is_active) === 0) return res.status(403).json({ error: 'Worker account is inactive' });
 
         const validPassword = await bcrypt.compare(password || '', user.password);
         if (!validPassword) {
@@ -447,7 +478,8 @@ app.post('/api/login', async (req, res) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                worker_type: user.worker_type || 'UNIVERSAL'
             }
         });
     } catch (err) {
@@ -461,7 +493,7 @@ app.get('/api/me', authRequired, async (req, res) => {
     try {
         const user = await db.getById('users', req.user.id);
         if (!user) return res.status(404).json({ error: 'User not found' });
-        res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, is_verified: user.is_verified, profile_pic: user.profile_pic, created_at: user.created_at } });
+        res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, worker_type: user.worker_type || 'UNIVERSAL', is_active: Number(user.is_active) !== 0, is_verified: user.is_verified, profile_pic: user.profile_pic, created_at: user.created_at } });
     } catch (err) {
         console.error('Get me error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -502,7 +534,7 @@ app.get('/api/admin/products', authRequired, adminRequired, async (req, res) => 
 });
 
 // Staff search stays database-backed and returns a bounded result set.
-app.get('/api/products/search', authRequired, workerOrAdminRequired, async (req, res) => {
+app.get('/api/products/search', authRequired, workerCapability('PHYSICAL'), async (req, res) => {
     try {
         const query = String(req.query.q || '').trim();
         const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
@@ -518,6 +550,20 @@ app.get('/api/products/search', authRequired, workerOrAdminRequired, async (req,
     } catch (err) {
         console.error('Product search error:', err);
         res.status(500).json({ error: 'Server error searching products' });
+    }
+});
+
+app.get('/api/products/barcode/:barcode', authRequired, workerCapability('PHYSICAL'), async (req, res) => {
+    try {
+        const barcode = String(req.params.barcode || '').trim();
+        if (!barcode) return res.status(400).json({ error: 'Barcode is required' });
+        const result = await pool.query('SELECT * FROM products WHERE barcode = $1 AND active = 1 LIMIT 1', [barcode]);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found for barcode: ' + barcode });
+        await enrichProductsWithInventory(result.rows[0]);
+        res.json({ product: result.rows[0], inStock: !!result.rows[0].in_stock });
+    } catch (err) {
+        console.error('Barcode lookup error:', err);
+        res.status(500).json({ error: 'Server error during barcode lookup' });
     }
 });
 
@@ -540,7 +586,7 @@ app.post('/api/categories', authRequired, adminRequired, async (req, res) => {
 
 // Product identification lookup by internal id / SKU / barcode / QR identifier.
 // NOTE: registered BEFORE '/api/products/:id' so 'lookup' is not eaten as an id.
-app.get('/api/products/lookup', authRequired, workerOrAdminRequired, async (req, res) => {
+app.get('/api/products/lookup', authRequired, workerCapability('PHYSICAL'), async (req, res) => {
     try {
         const identifier = req.query.identifier;
         if (!identifier) return res.status(400).json({ error: 'identifier query parameter is required' });
@@ -579,7 +625,7 @@ app.get('/api/products/:id', async (req, res) => {
 });
 
 // Add product (admin & worker)
-app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) => {
+app.post('/api/products', authRequired, adminRequired, async (req, res) => {
     try {
         const { name, category, price, rating, description, image, gallery, featured, stock,
             sku, barcode, qr_identifier, active, carton_enabled, units_per_carton, carton_price } = req.body;
@@ -598,7 +644,7 @@ app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) 
             const inUse = await inventory.identifierInUse(value);
             if (inUse) {
                 return res.status(409).json({
-                    error: label + ' "' + value + '" is already used by product "' + inUse.name + '"'
+                    error: label === 'Barcode' ? 'Barcode already belongs to another product.' : label + ' "' + value + '" is already used by product "' + inUse.name + '"'
                 });
             }
         }
@@ -643,13 +689,14 @@ app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) 
 
         res.status(201).json({ message: 'Product added successfully', product });
     } catch (err) {
+        if (err && err.code === '23505' && String(err.constraint || '').includes('barcode')) return res.status(409).json({ error: 'Barcode already belongs to another product.' });
         console.error('Add product error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // Update product (admin & worker)
-app.put('/api/products/:id', authRequired, workerOrAdminRequired, async (req, res) => {
+app.put('/api/products/:id', authRequired, adminRequired, async (req, res) => {
     try {
         const { name, category, price, rating, description, image, gallery, featured, stock,
             sku, barcode, qr_identifier, active, carton_enabled, units_per_carton, carton_price } = req.body;
@@ -665,7 +712,7 @@ app.put('/api/products/:id', authRequired, workerOrAdminRequired, async (req, re
         for (const [label, value] of [['SKU', sku], ['Barcode', barcode], ['QR identifier', qr_identifier]]) {
             if (value !== undefined && value) {
                 const inUse = await inventory.identifierInUse(value, existing.id);
-                if (inUse) return res.status(409).json({ error: label + ' is already used by another product' });
+                if (inUse) return res.status(409).json({ error: label === 'Barcode' ? 'Barcode already belongs to another product.' : label + ' is already used by another product' });
             }
         }
         if (carton_enabled && (!Number.isInteger(Number(units_per_carton)) || Number(units_per_carton) < 2 || !Number.isFinite(Number(carton_price)) || Number(carton_price) <= 0)) {
@@ -716,7 +763,7 @@ app.put('/api/products/:id', authRequired, workerOrAdminRequired, async (req, re
 });
 
 // Delete product (admin & worker)
-app.delete('/api/products/:id', authRequired, workerOrAdminRequired, async (req, res) => {
+app.delete('/api/products/:id', authRequired, adminRequired, async (req, res) => {
     try {
         const result = await db.remove('products', req.params.id);
         if (!result) return res.status(404).json({ error: 'Product not found' });
@@ -750,7 +797,7 @@ async function logIntegration(eventType, supermarketId, reference, detail) {
 // Realtime event stream (Server-Sent Events). Long-lived GET.
 // Staff pass their JWT as ?token=... so their stream is SCOPED to their
 // supermarket — a worker for store A never receives store B events (#4/#16).
-app.get('/api/stream', (req, res) => {
+app.get('/api/stream', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -766,6 +813,8 @@ app.get('/api/stream', (req, res) => {
             if (decoded && (decoded.role === 'worker' || decoded.role === 'admin')) {
                 client.staff = true;
                 client.userId = decoded.id;
+                const worker = await db.getById('users', decoded.id);
+                client.workerType = worker && worker.role === 'worker' ? String(worker.worker_type || 'UNIVERSAL').toUpperCase() : 'UNIVERSAL';
             }
         } catch (ignore) { /* invalid token -> public customer stream */ }
     }
@@ -779,7 +828,7 @@ app.get('/api/stream', (req, res) => {
 
 // Record a WHOLE physical sale session (multiple products, all-or-nothing).
 // Body: { items: [{ productId | product_id | identifier, quantity }], note?, external_sale_id? }
-app.post('/api/admin/inventory/physical-sale-session', authRequired, workerOrAdminRequired, async (req, res) => {
+app.post('/api/admin/inventory/physical-sale-session', authRequired, workerCapability('PHYSICAL'), async (req, res) => {
     try {
         const { items, note, external_sale_id, payment_method, amount_paid } = req.body;
         const paymentMethod = ['cash', 'card', 'bank_transfer'].includes(payment_method) ? payment_method : 'cash';
@@ -884,7 +933,7 @@ app.post('/api/admin/inventory/physical-sale-session', authRequired, workerOrAdm
 
 // Inventory dashboard snapshot for the staff dashboard: current stock + states
 // for every product, plus recent stock movements.
-app.get('/api/admin/inventory', authRequired, workerOrAdminRequired, async (req, res) => {
+app.get('/api/admin/inventory', authRequired, workerCapability('PHYSICAL'), async (req, res) => {
     try {
         const inventoryList = await inventory.listInventory();
         const movements = await inventory.listRecentMovements(null, Number(req.query.limit) || 50);
@@ -899,7 +948,7 @@ app.get('/api/admin/inventory', authRequired, workerOrAdminRequired, async (req,
 
 // Record a physical supermarket sale (worker/manager at the counter).
 // Body: { product_id, quantity, note? }
-app.post('/api/admin/inventory/physical-sales', authRequired, workerOrAdminRequired, async (req, res) => {
+app.post('/api/admin/inventory/physical-sales', authRequired, workerCapability('PHYSICAL'), async (req, res) => {
     try {
         const { product_id, quantity, note } = req.body;
         const result = await inventory.recordPhysicalSale({
@@ -922,7 +971,7 @@ app.post('/api/admin/inventory/physical-sales', authRequired, workerOrAdminRequi
 
 // Daily report (requirement #11) — computed from recorded transactions.
 // GET /api/admin/reports/daily?date=YYYY-MM-DD
-app.get('/api/admin/reports/daily', authRequired, workerOrAdminRequired, async (req, res) => {
+app.get('/api/admin/reports/daily', authRequired, adminRequired, async (req, res) => {
     try {
         const date = (req.query.date || new Date().toISOString().slice(0, 10)).slice(0, 10);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -934,6 +983,66 @@ app.get('/api/admin/reports/daily', authRequired, workerOrAdminRequired, async (
     } catch (err) {
         console.error('Daily report error:', err);
         res.status(500).json({ error: 'Server error building report' });
+    }
+});
+
+app.get('/api/admin/reports/summary', authRequired, adminRequired, async (req, res) => {
+    try {
+        const now = new Date();
+        const from = req.query.from || now.toISOString().slice(0, 10);
+        const to = req.query.to || from;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return res.status(400).json({ error: 'from and to must be YYYY-MM-DD' });
+        const start = from + 'T00:00:00.000Z';
+        const end = to + 'T23:59:59.999Z';
+        const orders = (await db.getAll('orders')).filter(o => o.created_at >= start && o.created_at <= end);
+        const physicalSales = (await db.getAll('physical_sales')).filter(s => s.created_at >= start && s.created_at <= end);
+        const audits = (await db.getAll('audit_logs')).filter(a => a.created_at >= start && a.created_at <= end);
+        const byMethod = {};
+        const byStatus = {};
+        const byDay = {};
+        orders.forEach(order => {
+            const method = order.payment_method || 'unknown';
+            const status = order.payment_status || 'pending';
+            byMethod[method] = byMethod[method] || { orders: 0, total: 0, paid: 0, pending: 0, failed: 0 };
+            byMethod[method].orders += 1;
+            byMethod[method].total += Number(order.total) || 0;
+            if (status === 'verified') byMethod[method].paid += Number(order.total) || 0;
+            if (status === 'pending') byMethod[method].pending += 1;
+            if (status === 'failed') byMethod[method].failed += 1;
+            byStatus[status] = (byStatus[status] || 0) + 1;
+            const day = String(order.created_at).slice(0, 10);
+            byDay[day] = byDay[day] || { orders: 0, revenue: 0 };
+            byDay[day].orders += 1;
+            byDay[day].revenue += Number(order.total) || 0;
+        });
+        const workerActivity = {};
+        audits.forEach(a => {
+            const key = a.actor_user_id || 'system';
+            workerActivity[key] = workerActivity[key] || { worker_id: a.actor_user_id, worker_name: a.actor_name || 'System', worker_type: a.actor_worker_type || '', actions: 0 };
+            workerActivity[key].actions += 1;
+        });
+        res.json({
+            range: { from, to },
+            totals: {
+                onlineOrders: orders.length,
+                physicalSales: physicalSales.length,
+                onlineRevenue: orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0),
+                physicalRevenue: physicalSales.reduce((sum, s) => sum + (Number(s.total) || 0), 0),
+                paid: orders.filter(o => o.payment_status === 'verified').reduce((sum, o) => sum + (Number(o.total) || 0), 0) + physicalSales.reduce((sum, s) => sum + (Number(s.total) || 0), 0),
+                pendingPayments: orders.filter(o => o.payment_status === 'pending').length,
+                failedPayments: orders.filter(o => o.payment_status === 'failed').length,
+                cancelledOrders: orders.filter(o => o.status === 'cancelled').length,
+                completedOrders: orders.filter(o => ['completed', 'delivered'].includes(o.status)).length,
+                averageOrderValue: orders.length ? orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0) / orders.length : 0
+            },
+            byPaymentMethod: byMethod,
+            byStatus,
+            byDay,
+            workerActivity
+        });
+    } catch (err) {
+        console.error('Summary report error:', err);
+        res.status(500).json({ error: 'Server error building summary report' });
     }
 });
 
@@ -1063,6 +1172,7 @@ app.post('/api/pos/sales', async (req, res) => {
 
         await logIntegration('pos_sale_processed', supermarketId, external_sale_id,
             'items=' + result.items.length + ' total=' + result.total);
+        await writeAudit(req, 'PHYSICAL_SALE_COMPLETED', 'sale', saleRef, null, 'completed', { total: result.total, item_count: result.items.length });
 
         res.status(201).json({
             message: 'POS sale processed',
@@ -1243,7 +1353,7 @@ app.get('/api/orders', authRequired, async (req, res) => {
 });
 
 // Get all orders (admin/worker)
-app.get('/api/admin/orders', authRequired, workerOrAdminRequired, async (req, res) => {
+app.get('/api/admin/orders', authRequired, workerCapability('ONLINE'), async (req, res) => {
     try {
         const orders = await db.getAll('orders');
         orders.sort((a, b) => Number(b.id) - Number(a.id));
@@ -1254,8 +1364,28 @@ app.get('/api/admin/orders', authRequired, workerOrAdminRequired, async (req, re
     }
 });
 
+app.post('/api/admin/orders/:id/assign', authRequired, workerCapability('ONLINE'), async (req, res) => {
+    try {
+        const existing = await db.getById('orders', req.params.id);
+        if (!existing) return res.status(404).json({ error: 'Order not found' });
+        const worker = req.worker || await db.getById('users', req.user.id);
+        const updated = await db.update('orders', existing.id, {
+            assigned_worker_id: String(worker.id),
+            assigned_worker_name: worker.name,
+            assigned_worker_type: worker.worker_type || 'UNIVERSAL',
+            assigned_at: existing.assigned_at || new Date().toISOString(),
+            status: existing.status === 'pending' ? 'processing' : existing.status
+        });
+        await writeAudit(req, 'ORDER_ASSIGNED', 'order', existing.id, existing.status, updated.status, { order_ref: existing.order_ref });
+        res.json({ order: updated });
+    } catch (err) {
+        console.error('Assign order error:', err);
+        res.status(500).json({ error: 'Could not assign order' });
+    }
+});
+
 // Update order status (admin/worker)
-app.put('/api/admin/orders/:id', authRequired, workerOrAdminRequired, async (req, res) => {
+app.put('/api/admin/orders/:id', authRequired, workerCapability('ONLINE'), async (req, res) => {
     try {
         const { status, payment_status, delivered } = req.body;
         const existing = await db.getById('orders', req.params.id);
@@ -1323,6 +1453,7 @@ app.put('/api/admin/orders/:id', authRequired, workerOrAdminRequired, async (req
         });
 
         const affected = restoredItems.length;
+        await writeAudit(req, newStatus === 'delivered' ? 'ORDER_COMPLETED' : isCancelling ? 'ORDER_CANCELLED' : 'ORDER_STATUS_UPDATED', 'order', existing.id, existing.status, newStatus, { order_ref: existing.order_ref });
         sendEmailInBackground(emailService.sendOrderStatusEmail(updatedOrder));
 
         res.json({
@@ -1430,10 +1561,11 @@ app.get('/api/payments/transfer-config', authRequired, async (req, res) => {
 
 async function resolveManualPayment(paymentId, outcome, actorUserId) {
     const nextPaymentRecordStatus = outcome === 'paid' ? 'verified' : 'rejected';
+    const actor = actorUserId === 'email' ? null : await db.getById('users', actorUserId);
     const claimedPayment = await pool.query(
-        `UPDATE payment_verifications SET status = $2
+        `UPDATE payment_verifications SET status = $2, processed_by = $3, processed_by_name = $4, processed_at = $5
          WHERE id = $1 AND status = 'pending' RETURNING *`,
-        [String(paymentId), nextPaymentRecordStatus]
+        [String(paymentId), nextPaymentRecordStatus, actor ? String(actor.id) : null, actor ? actor.name : 'email', new Date().toISOString()]
     );
     if (claimedPayment.rows.length === 0) {
         const current = await db.getById('payment_verifications', paymentId);
@@ -1474,10 +1606,12 @@ async function resolveManualPayment(paymentId, outcome, actorUserId) {
     }
     await logIntegration('transfer_payment_' + outcome, supermarketId, order.order_ref,
         'payment verification ' + payment.id + ' by user ' + (actorUserId || 'system'));
+    await writeAudit({ user: actor, req: { user: actor } }, outcome === 'paid' ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED', 'payment', payment.id,
+        'pending', nextOrderStatus, { order_ref: order.order_ref, transaction_ref: payment.transaction_ref });
     return { duplicate: false, payment, order };
 }
 
-app.post('/api/admin/payments/:id/verify', authRequired, workerOrAdminRequired, async (req, res) => {
+app.post('/api/admin/payments/:id/verify', authRequired, workerCapability('ONLINE'), async (req, res) => {
     try {
         const result = await resolveManualPayment(req.params.id, 'paid', req.user.id);
         res.json({ message: result.duplicate ? 'Payment was already processed' : 'Payment verified', duplicate: result.duplicate, payment_status: 'verified', order_ref: result.payment && result.payment.order_ref });
@@ -1487,7 +1621,7 @@ app.post('/api/admin/payments/:id/verify', authRequired, workerOrAdminRequired, 
     }
 });
 
-app.post('/api/admin/payments/:id/reject', authRequired, workerOrAdminRequired, async (req, res) => {
+app.post('/api/admin/payments/:id/reject', authRequired, workerCapability('ONLINE'), async (req, res) => {
     try {
         const result = await resolveManualPayment(req.params.id, 'failed', req.user.id);
         res.json({ message: result.duplicate ? 'Payment was already processed' : 'Payment rejected', duplicate: result.duplicate, payment_status: 'failed', order_ref: result.payment && result.payment.order_ref });
@@ -1497,7 +1631,7 @@ app.post('/api/admin/payments/:id/reject', authRequired, workerOrAdminRequired, 
     }
 });
 
-app.post('/api/admin/orders/:id/collect-cash', authRequired, workerOrAdminRequired, async (req, res) => {
+app.post('/api/admin/orders/:id/collect-cash', authRequired, workerCapability('ONLINE'), async (req, res) => {
     try {
         const claimed = await pool.query(
             `UPDATE orders SET payment_status = 'verified',
@@ -1511,6 +1645,7 @@ app.post('/api/admin/orders/:id/collect-cash', authRequired, workerOrAdminRequir
             return res.json({ message: 'Cash payment was already processed', duplicate: true, payment_status: current.payment_status });
         }
         const order = claimed.rows[0];
+        await writeAudit(req, 'COD_COLLECTED', 'order', order.id, 'pending', 'verified', { order_ref: order.order_ref });
         const supermarketId = await inventory.getDefaultSupermarketId();
         events.publish(events.EVENT_TYPES.COD_PAYMENT_COLLECTED, {
             orderRef: order.order_ref,
@@ -1540,7 +1675,7 @@ app.post('/api/admin/orders/:id/collect-cash', authRequired, workerOrAdminRequir
     }
 });
 
-app.get('/api/admin/payments/pending', authRequired, workerOrAdminRequired, async (req, res) => {
+app.get('/api/admin/payments/pending', authRequired, workerCapability('ONLINE'), async (req, res) => {
     try {
         const payments = await db.findAll('payment_verifications', p => p.status === 'pending');
         const orders = await db.getAll('orders');
@@ -1867,10 +2002,12 @@ app.post('/api/webhooks/flutterwave', async (req, res) => {
 // Add worker
 app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => {
     try {
-        const { name, email } = req.body;
+        const { name, email, worker_type } = req.body;
         if (!name || !email) {
             return res.status(400).json({ error: 'Name and email are required' });
         }
+        const workerType = String(worker_type || 'UNIVERSAL').toUpperCase();
+        if (!['ONLINE', 'PHYSICAL', 'UNIVERSAL'].includes(workerType)) return res.status(400).json({ error: 'Invalid worker type' });
 
         // Check if user exists
         const existing = await db.findBy('users', u => u.email === email.toLowerCase());
@@ -1890,6 +2027,8 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
             email: email.toLowerCase(),
             password: hashedPassword,
             role: 'worker',
+            worker_type: workerType,
+            is_active: 1,
             is_verified: 1,
             profile_pic: null,
             created_at: new Date().toISOString()
@@ -1922,7 +2061,9 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
                 name,
                 email: email.toLowerCase(),
                 username,
-                loginCode
+                loginCode,
+                worker_type: workerType,
+                is_active: 1
             }
         });
     } catch (err) {
@@ -1936,7 +2077,7 @@ app.get('/api/admin/workers', authRequired, adminRequired, async (req, res) => {
     try {
         const workers = await db.findAll('users', u => u.role === 'worker');
         workers.sort((a, b) => Number(b.id) - Number(a.id));
-        res.json({ workers: workers.map(w => ({ id: w.id, name: w.name, email: w.email, role: w.role, is_verified: w.is_verified, created_at: w.created_at })) });
+        res.json({ workers: workers.map(w => ({ id: w.id, name: w.name, email: w.email, role: w.role, worker_type: w.worker_type || 'UNIVERSAL', is_active: Number(w.is_active) !== 0, is_verified: w.is_verified, created_at: w.created_at })) });
     } catch (err) {
         console.error('Get workers error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -1949,8 +2090,8 @@ app.delete('/api/admin/workers/:id', authRequired, adminRequired, async (req, re
         const worker = await db.getById('users', req.params.id);
         if (!worker || worker.role !== 'worker') return res.status(404).json({ error: 'Worker not found' });
 
-        await db.remove('users', worker.id);
-        await db.removeWhere('worker_codes', wc => String(wc.worker_id) === String(worker.id));
+        await db.update('users', worker.id, { is_active: 0 });
+        await writeAudit(req, 'WORKER_DEACTIVATED', 'worker', worker.id, 'active', 'inactive', { worker_name: worker.name });
         res.json({ message: 'Worker removed successfully' });
     } catch (err) {
         console.error('Delete worker error:', err);
@@ -1958,10 +2099,45 @@ app.delete('/api/admin/workers/:id', authRequired, adminRequired, async (req, re
     }
 });
 
+app.put('/api/admin/workers/:id', authRequired, adminRequired, async (req, res) => {
+    try {
+        const worker = await db.getById('users', req.params.id);
+        if (!worker || worker.role !== 'worker') return res.status(404).json({ error: 'Worker not found' });
+        const nextType = String(req.body.worker_type || worker.worker_type || 'UNIVERSAL').toUpperCase();
+        if (!['ONLINE', 'PHYSICAL', 'UNIVERSAL'].includes(nextType)) return res.status(400).json({ error: 'Invalid worker type' });
+        const active = req.body.is_active === undefined ? Number(worker.is_active) !== 0 : !!req.body.is_active;
+        const updated = await db.update('users', worker.id, { worker_type: nextType, is_active: active ? 1 : 0 });
+        await writeAudit(req, active ? 'WORKER_REACTIVATED' : 'WORKER_DEACTIVATED', 'worker', worker.id,
+            Number(worker.is_active) !== 0 ? 'active' : 'inactive', active ? 'active' : 'inactive', { worker_name: worker.name, worker_type: nextType });
+        res.json({ worker: { id: updated.id, name: updated.name, email: updated.email, worker_type: updated.worker_type, is_active: active } });
+    } catch (err) {
+        console.error('Update worker error:', err);
+        res.status(500).json({ error: 'Server error updating worker' });
+    }
+});
+
 // ===== ADMIN REPORTS ROUTES =====
 
 // Get admin dashboard stats
-app.get('/api/admin/stats', authRequired, workerOrAdminRequired, async (req, res) => {
+app.get('/api/worker/stats', authRequired, workerOrAdminRequired, async (req, res) => {
+    try {
+        const products = await db.getAll('products');
+        const orders = await db.getAll('orders');
+        const payments = await db.getAll('payment_verifications');
+
+        const totalProducts = products.length;
+        const totalOrders = orders.length;
+        const pendingPayments = payments.filter(p => p.status === 'pending').length;
+        const totalRevenue = orders.filter(o => o.payment_status === 'verified').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
+        res.json({ stats: { totalProducts, totalOrders, totalRevenue, pendingPayments } });
+    } catch (err) {
+        console.error('Worker stats error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/admin/stats', authRequired, adminRequired, async (req, res) => {
     try {
         const products = await db.getAll('products');
         const orders = await db.getAll('orders');
@@ -2058,6 +2234,18 @@ app.get('/api/admin/export/orders', authRequired, adminRequired, async (req, res
         console.error('Export orders error:', err);
         res.status(500).json({ error: 'Server error' });
     }
+});
+
+app.get('/api/admin/export/audit', authRequired, adminRequired, async (req, res) => {
+    try {
+        const rows = await db.getAll('audit_logs');
+        const csvRows = [['Date', 'Worker ID', 'Worker Name', 'Worker Type', 'Action', 'Target Type', 'Target ID', 'Previous Status', 'New Status', 'Details']];
+        rows.forEach(row => csvRows.push([row.created_at, row.actor_user_id, row.actor_name, row.actor_worker_type, row.action, row.target_type, row.target_id, row.previous_status, row.new_status, row.details]));
+        const csv = csvRows.map(row => row.map(cell => '"' + String(cell == null ? '' : cell).replace(/"/g, '""') + '"').join(',')).join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=operations-audit.csv');
+        res.send(csv);
+    } catch (err) { res.status(500).json({ error: 'Server error exporting audit log' }); }
 });
 
 // Export product report as CSV

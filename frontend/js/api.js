@@ -184,6 +184,11 @@ async function apiSearchProducts(query) {
     return data.products || [];
 }
 
+async function apiGetProductByBarcode(barcode) {
+    const data = await apiRequest('/api/products/barcode/' + encodeURIComponent(barcode));
+    return data;
+}
+
 async function apiGetCategories() {
     const data = await apiRequest('/api/categories');
     return data.categories || [];
@@ -241,6 +246,10 @@ async function apiUpdateOrderStatus(id, status, paymentStatus) {
     });
 }
 
+async function apiAssignOrder(id) {
+    return apiRequest('/api/admin/orders/' + id + '/assign', { method: 'POST' });
+}
+
 // ===== Payment API =====
 async function apiSubmitPaymentVerification(details) {
     return apiRequest('/api/payments/verify', {
@@ -271,10 +280,10 @@ async function apiGetPendingPayments() {
 }
 
 // ===== Worker API (Admin only) =====
-async function apiAddWorker(name, email) {
+async function apiAddWorker(name, email, worker_type) {
     return apiRequest('/api/admin/workers', {
         method: 'POST',
-        body: JSON.stringify({ name, email })
+        body: JSON.stringify({ name, email, worker_type })
     });
 }
 
@@ -289,9 +298,21 @@ async function apiDeleteWorker(id) {
     });
 }
 
+async function apiUpdateWorker(id, details) {
+    return apiRequest('/api/admin/workers/' + id, { method: 'PUT', body: JSON.stringify(details) });
+}
+
 // ===== Admin Stats & Reports =====
 async function apiGetAdminStats() {
     return apiRequest('/api/admin/stats');
+}
+
+async function apiGetWorkerStats() {
+    return apiRequest('/api/worker/stats');
+}
+
+async function apiGetAdminReportSummary(from, to) {
+    return apiRequest('/api/admin/reports/summary?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
 }
 
 // ===== Inventory API (staff dashboard + physical sales) =====
@@ -341,6 +362,12 @@ function exportProductsCSV() {
     const token = getToken();
     if (!token) return;
     window.open(API_BASE + '/api/admin/export/products?token=' + token, '_blank');
+}
+
+function exportAuditCSV() {
+    const token = getToken();
+    if (!token) return;
+    window.open(API_BASE + '/api/admin/export/audit?token=' + token, '_blank');
 }
 
 // ===== Auth UI Update =====

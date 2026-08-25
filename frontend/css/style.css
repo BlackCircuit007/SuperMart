@@ -2430,6 +2430,45 @@ body.dark-mode .payment-modal input[type="number"]{
 
 
 /* ===== Stock availability badges ===== */
+.pos-payment-panel {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--c-border);
+}
+
+.pos-change,
+.pos-receipt {
+    margin: 8px 0 0;
+    color: var(--c-text-secondary);
+    font-size: 14px;
+}
+
+.pos-receipt {
+    color: #16803c;
+    font-weight: 700;
+}
+
+.pos-qty-btn {
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--c-border);
+    border-radius: 4px;
+    background: var(--c-card-bg);
+    color: var(--c-text);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.pos-qty-btn:hover { border-color: var(--c-primary); color: var(--c-primary); }
+
+@media (max-width: 600px) {
+    .pos-qty-btn { width: 28px; height: 28px; }
+    #worker-sale-session > div { flex-wrap: wrap; }
+    #worker-sale-session > div > div:first-child { flex-basis: 100%; }
+}
+
+/* ===== Stock availability badges ===== */
 .stock-badge {
     display: inline-flex;
     align-items: center;

@@ -781,7 +781,8 @@ app.get('/api/stream', (req, res) => {
 // Body: { items: [{ productId | product_id | identifier, quantity }], note?, external_sale_id? }
 app.post('/api/admin/inventory/physical-sale-session', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
-        const { items, note, external_sale_id } = req.body;
+        const { items, note, external_sale_id, payment_method, amount_paid } = req.body;
+        const paymentMethod = ['cash', 'card', 'bank_transfer'].includes(payment_method) ? payment_method : 'cash';
 
         // Idempotency for scanned sessions too (requirement #14): if this exact
         // external id was already processed, do NOT deduct stock again.
@@ -820,7 +821,27 @@ app.post('/api/admin/inventory/physical-sale-session', authRequired, workerOrAdm
             actorUserId: req.user.id,
             note,
             referenceType: external_sale_id ? 'pos_sale' : 'physical_sale',
-            referenceId: external_sale_id || null
+            referenceId: external_sale_id || null,
+            validatePayment: total => {
+                if (paymentMethod === 'cash' && (!Number.isFinite(Number(amount_paid)) || Number(amount_paid) < total)) {
+                    throw httpError(400, 'Cash received must cover the sale total');
+                }
+            }
+        });
+
+        const amountPaid = Number(amount_paid);
+        const paid = paymentMethod === 'cash' ? amountPaid : result.total;
+        const saleRef = external_sale_id || generateOrderRef();
+        await db.insert('physical_sales', {
+            sale_ref: saleRef,
+            supermarket_id: String(supermarketId),
+            actor_user_id: req.user.id,
+            payment_method: paymentMethod,
+            amount_paid: paid,
+            change_due: Math.max(0, paid - result.total),
+            total: result.total,
+            items: JSON.stringify(result.items),
+            created_at: new Date().toISOString()
         });
 
         if (external_sale_id) {
@@ -848,7 +869,9 @@ app.post('/api/admin/inventory/physical-sale-session', authRequired, workerOrAdm
             total: result.total, itemCount: result.items.length, supermarketId: result.supermarketId
         });
 
-        res.status(201).json({ message: 'Physical sale recorded', result });
+        res.status(201).json({ message: 'Physical sale recorded', sale_ref: saleRef,
+            payment_method: paymentMethod, amount_paid: paid,
+            change_due: Math.max(0, paid - result.total), result });
     } catch (err) {
         if (err && err.name === 'InsufficientStockError') {
             return res.status(409).json({ error: err.message });

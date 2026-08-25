@@ -236,6 +236,21 @@ async function createTables() {
             )
         `);
 
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS physical_sales (
+                id SERIAL PRIMARY KEY,
+                sale_ref TEXT NOT NULL UNIQUE,
+                supermarket_id INTEGER NOT NULL,
+                actor_user_id INTEGER,
+                payment_method TEXT NOT NULL,
+                amount_paid NUMERIC NOT NULL,
+                change_due NUMERIC NOT NULL DEFAULT 0,
+                total NUMERIC NOT NULL,
+                items TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        `);
+
         // Integration logging (requirement #21). Never stores secrets.
         await client.query(`
             CREATE TABLE IF NOT EXISTS integration_logs (

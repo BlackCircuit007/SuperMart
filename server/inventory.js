@@ -429,7 +429,7 @@ async function identifierInUse(rawIdentifier, excludeProductId) {
  * the authoritative price comes from the database per line (requirement #9).
  */
 async function recordPhysicalSaleSession({
-    supermarketId, items, actorUserId, note, referenceType, referenceId
+    supermarketId, items, actorUserId, note, referenceType, referenceId, validatePayment
 }) {
     if (!Array.isArray(items) || items.length === 0) {
         const e = new Error('A physical sale needs at least one item');
@@ -506,6 +506,7 @@ async function recordPhysicalSaleSession({
         }
 
         const total = sold.reduce((sum, l) => sum + l.lineTotal, 0);
+        if (typeof validatePayment === 'function') validatePayment(total);
         return { items: sold, total, supermarketId: String(sid) };
     });
 }

@@ -675,10 +675,25 @@
                         <p style="color:#999;font-size:14px;">No items yet — scan a product to begin.</p>
                     </div>
 
+                    <div class="pos-payment-panel">
+                        <label for="worker-payment-method">Payment method</label>
+                        <select id="worker-payment-method" onchange="toggleWorkerCashPayment()">
+                            <option value="cash">Cash</option>
+                            <option value="card">Card</option>
+                            <option value="bank_transfer">Bank transfer</option>
+                        </select>
+                        <div id="worker-cash-payment">
+                            <label for="worker-amount-paid">Amount received</label>
+                            <input type="number" id="worker-amount-paid" min="0" step="0.01" placeholder="Enter cash received" oninput="updateWorkerChange()">
+                            <p class="pos-change">Change: <strong id="worker-sale-change">₦0</strong></p>
+                        </div>
+                    </div>
+
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
                         <strong>Total: <span id="worker-sale-total">₦0</span></strong>
-                        <button class="admin-btn" style="width:auto;margin-top:0;padding:10px 18px;" onclick="completeWorkerSale()">Complete Sale</button>
+                        <button class="admin-btn green" style="width:auto;margin-top:0;padding:10px 18px;" onclick="completeWorkerSale()">Complete Sale</button>
                     </div>
+                    <p id="worker-sale-receipt" class="pos-receipt" aria-live="polite"></p>
                 </div>
                 <div class="admin-card2">
                     <h2>📦 Current Stock</h2>
@@ -884,16 +899,6 @@ function loadWorkerInventory() {
     apiGetInventory().then(function (data) {
         var invBody = document.getElementById("workerInventoryBody");
         var movBody = document.getElementById("workerMovementsBody");
-
-        if (sel) {
-            var current = sel.value;
-            var opts = '<option value="">Select product...</option>';
-            (data.inventory || []).forEach(function (row) {
-                if (row.in_stock) opts += '<option value="' + row.product_id + '">' + row.name + ' (' + row.quantity + ' left)</option>';
-            });
-            sel.innerHTML = opts;
-            try { sel.value = current; } catch (e) {}
-        }
         if (invBody) {
             invBody.innerHTML = "";
             if (!data.inventory || data.inventory.length === 0) {
@@ -945,7 +950,10 @@ function addWorkerSaleProduct(p, purchaseType) {
     var priceValue = carton ? Number(p.carton_price) : Number(p.price);
     if (carton && (!p.carton_enabled || !units || !p.carton_price)) { showToast('Carton purchase is not available', 'error'); return; }
     var existing = workerSaleSession.find(function (l) { return String(l.productId) === String(p.id) && l.purchaseType === purchaseType; });
-    if (existing) existing.quantity += 1;
+    if (existing) {
+        if (existing.quantity >= existing.available) { showToast('Not enough stock available', 'error'); return; }
+        existing.quantity += 1;
+    }
     else workerSaleSession.push({ productId: p.id, name: p.name, unitPrice: priceValue, quantity: 1, available: Math.floor(Number(p.stock_available) / units), purchaseType: purchaseType, unitsPerCarton: units });
     renderWorkerSaleSession();
 }
@@ -957,7 +965,7 @@ function searchWorkerProducts(value) {
     if (!value.trim()) { box.innerHTML = ''; return; }
     workerSearchTimer = setTimeout(function () {
         apiSearchProducts(value.trim()).then(function (products) {
-            box.innerHTML = products.map(function (p) { return '<div class="admin-product-item"><div class="info"><h4>' + p.name + '</h4><span class="cat">' + price(p.price) + ' • Stock: ' + p.stock_available + '</span></div><button class="admin-btn" style="width:auto;margin:0" onclick="addWorkerSaleProduct(window.workerSearchProducts[' + JSON.stringify(String(p.id)) + '],\'unit\')">Add</button></div>'; }).join('') || '<p class="sub">Product not found</p>';
+            box.innerHTML = products.map(function (p) { var id = JSON.stringify(String(p.id)); return '<div class="admin-product-item"><div class="info"><h4>' + p.name + '</h4><span class="cat">' + price(p.price) + ' • Stock: ' + p.stock_available + '</span></div><button class="admin-btn" style="width:auto;margin:0" onclick="addWorkerSaleProduct(window.workerSearchProducts[' + id + '],\'unit\')">Add unit</button>' + (p.carton_enabled ? '<button class="admin-btn green" style="width:auto;margin:0" onclick="addWorkerSaleProduct(window.workerSearchProducts[' + id + '],\'carton\')">Add carton</button>' : '') + '</div>'; }).join('') || '<p class="sub">Product not found</p>';
             window.workerSearchProducts = {}; products.forEach(function (p) { window.workerSearchProducts[String(p.id)] = p; });
         }).catch(function (err) { box.innerHTML = '<p class="sub">' + err.message + '</p>'; });
     }, 250);
@@ -978,8 +986,10 @@ function renderWorkerSaleSession() {
             '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--c-border);">' +
             '<div style="flex:1;"><strong>' + line.name + '</strong><br><small style="color:#999;">' +
             price(line.unitPrice) + (line.purchaseType === 'carton' ? ' per carton' : ' each') + ' • ' + line.available + ' available</small></div>' +
+            '<button type="button" class="pos-qty-btn" onclick="changeSaleQty(' + idx + ', -1)">−</button>' +
             '<input type="number" min="1" value="' + line.quantity + '" data-idx="' + idx + '" ' +
             'onchange="updateSaleQty(this.dataset.idx, this.value)" style="width:70px;padding:6px;">' +
+            '<button type="button" class="pos-qty-btn" onclick="changeSaleQty(' + idx + ', 1)">+</button>' +
             '<b style="min-width:90px;text-align:right;">' + price(line.unitPrice * line.quantity) + '</b>' +
             '<button class="delete-btn" style="width:auto;" onclick="removeSaleLine(' + idx + ')">✕</button>' +
             '</div>';
@@ -995,11 +1005,29 @@ function updateSaleQty(idx, value) {
     if (!line) return;
     if (!qty || qty < 1) qty = 1;
     if (qty > line.available) {
-        showToast("Only " + line.available + " unit(s) of " + line.name + " in stock", "error");
+        showToast("Only " + line.available + " " + (line.purchaseType === 'carton' ? 'carton(s)' : 'unit(s)') + " of " + line.name + " available", "error");
         qty = line.available;
     }
     line.quantity = qty;
     renderWorkerSaleSession();
+}
+
+function changeSaleQty(idx, delta) {
+    var line = workerSaleSession[idx];
+    if (line) updateSaleQty(idx, line.quantity + delta);
+}
+
+function toggleWorkerCashPayment() {
+    var method = document.getElementById('worker-payment-method').value;
+    document.getElementById('worker-cash-payment').style.display = method === 'cash' ? 'block' : 'none';
+    updateWorkerChange();
+}
+
+function updateWorkerChange() {
+    var total = workerSaleSession.reduce(function (sum, line) { return sum + line.unitPrice * line.quantity; }, 0);
+    var paid = Number(document.getElementById('worker-amount-paid').value) || 0;
+    var change = Math.max(0, paid - total);
+    document.getElementById('worker-sale-change').textContent = price(change);
 }
 
 function removeSaleLine(idx) {
@@ -1024,22 +1052,7 @@ async function scanWorkerProduct() {
             input.value = "";
             return;
         }
-        var existing = workerSaleSession.find(function (l) { return String(l.productId) === String(p.id); });
-        if (existing) {
-            if (existing.quantity + 1 > found.quantityAvailable) {
-                showToast("Only " + found.quantityAvailable + " unit(s) available", "error");
-                return;
-            }
-            existing.quantity += 1;
-        } else {
-            workerSaleSession.push({
-                productId: p.id,
-                name: p.name,
-                unitPrice: Number(p.price),
-                quantity: 1,
-                available: found.quantityAvailable
-            });
-        }
+        addWorkerSaleProduct(p, 'unit');
         if (status) status.textContent = "Added: " + p.name + " (" + found.identifierType + ")";
         input.value = "";
         input.focus();
@@ -1053,6 +1066,10 @@ async function scanWorkerProduct() {
 // Complete the WHOLE sale atomically — all items or nothing (#8).
 async function completeWorkerSale() {
     if (workerSaleSession.length === 0) { showToast("Nothing to sell", "error"); return; }
+    var paymentMethod = document.getElementById('worker-payment-method').value;
+    var amountPaid = paymentMethod === 'cash' ? Number(document.getElementById('worker-amount-paid').value) : 0;
+    var total = workerSaleSession.reduce(function (sum, line) { return sum + line.unitPrice * line.quantity; }, 0);
+    if (paymentMethod === 'cash' && (!Number.isFinite(amountPaid) || amountPaid < total)) { showToast('Cash received must cover the sale total', 'error'); return; }
     var items = workerSaleSession.map(function (l) {
         return { productId: l.productId, quantity: l.quantity, purchaseType: l.purchaseType };
     });
@@ -1061,12 +1078,15 @@ async function completeWorkerSale() {
     if (btn) { btn.disabled = true; btn.textContent = "Processing..."; }
 
     try {
-        await apiRequest('/api/admin/inventory/physical-sale-session', {
+        var result = await apiRequest('/api/admin/inventory/physical-sale-session', {
             method: 'POST',
-            body: JSON.stringify({ items: items })
+            body: JSON.stringify({ items: items, payment_method: paymentMethod, amount_paid: amountPaid })
         });
-        showToast("Physical sale completed ✓", "success");
+        showToast("Sale completed", "success");
+        document.getElementById('worker-sale-receipt').textContent = 'Receipt ' + result.sale_ref + ' • Total ' + price(result.result.total) + (paymentMethod === 'cash' ? ' • Change ' + price(result.change_due) : ' • Paid by ' + paymentMethod.replace('_', ' '));
         workerSaleSession = [];
+        document.getElementById('worker-amount-paid').value = '';
+        document.getElementById('worker-sale-change').textContent = '₦0';
         renderWorkerSaleSession();
         loadWorkerInventory();
     } catch (err) {

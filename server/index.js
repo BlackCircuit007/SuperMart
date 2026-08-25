@@ -1081,7 +1081,7 @@ app.post('/api/pos/sales', async (req, res) => {
 // Place order
 app.post('/api/orders', authRequired, async (req, res) => {
     try {
-        const { customer_name, customer_email, customer_phone, shipping_address, payment_method, items, total } = req.body;
+        const { customer_name, customer_email, customer_phone, shipping_address, customer_notes, payment_method, items, total } = req.body;
 
         if (!customer_name || !customer_email || !customer_phone || !shipping_address || !payment_method || !items || items.length === 0 || !Number.isFinite(Number(total)) || Number(total) <= 0) {
             return res.status(400).json({ error: 'All order fields are required' });
@@ -1152,11 +1152,11 @@ app.post('/api/orders', authRequired, async (req, res) => {
 
                 const orderRow = await client.query(
                     `INSERT INTO orders (order_ref, user_id, customer_name, customer_email, customer_phone,
-                        shipping_address, payment_method, payment_status, total, items, status, delivered, created_at, payment_provider)
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+                        shipping_address, customer_notes, payment_method, payment_status, total, items, status, delivered, created_at, payment_provider)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
                     [
                         orderRef, String(req.user.id), customer_name, customer_email, customer_phone,
-                        shipping_address, payment_method, 'pending', serverTotal.toFixed(2),
+                        shipping_address, customer_notes || null, payment_method, 'pending', serverTotal.toFixed(2),
                         JSON.stringify(validatedItems), 'pending', 0, new Date().toISOString(),
                         payment_method === 'flutterwave' ? 'flutterwave' : null
                     ]
@@ -1180,6 +1180,7 @@ app.post('/api/orders', authRequired, async (req, res) => {
             customer_email,
             customer_phone,
             shipping_address,
+            customer_notes: createdOrder.customer_notes || null,
             payment_method,
             total: createdOrder.total,
             items: JSON.parse(createdOrder.items)
@@ -1200,6 +1201,13 @@ app.post('/api/orders', authRequired, async (req, res) => {
             status: 'pending',
             orderStatus: 'NEW',
             customerName: createdOrder.customer_name,
+            customerPhone: createdOrder.customer_phone,
+            customerEmail: createdOrder.customer_email,
+            shippingAddress: createdOrder.shipping_address,
+            customerNotes: createdOrder.customer_notes || '',
+            orderTime: createdOrder.created_at,
+            paymentMethod: createdOrder.payment_method,
+            paymentStatus: createdOrder.payment_status,
             total: Number(createdOrder.total),
             itemCount: notifiedItems.length,
             items: notifiedItems.map(i => ({ name: i.name, quantity: i.quantity })),
@@ -1334,7 +1342,7 @@ app.put('/api/admin/orders/:id', authRequired, workerOrAdminRequired, async (req
 // Submit payment verification
 app.post('/api/payments/verify', authRequired, async (req, res) => {
     try {
-        const { order_ref, payer_name, payer_phone, payer_email, amount, transaction_ref } = req.body;
+        const { order_ref, payer_name, payer_phone, payer_email, amount, transaction_ref, payment_notes, proof_url } = req.body;
         if (!order_ref || !payer_phone || !amount || !transaction_ref || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
             return res.status(400).json({ error: 'All payment details are required' });
         }
@@ -1351,6 +1359,12 @@ app.post('/api/payments/verify', authRequired, async (req, res) => {
             return res.status(400).json({ error: 'Payment amount does not match the order total' });
         }
 
+        const existingPending = await db.findBy('payment_verifications', p =>
+            p.order_ref === order_ref && p.status === 'pending');
+        if (existingPending) {
+            return res.status(409).json({ error: 'A payment verification is already pending for this order', paymentId: existingPending.id });
+        }
+
         const payment = await db.insert('payment_verifications', {
             order_ref,
             payer_name,
@@ -1359,7 +1373,26 @@ app.post('/api/payments/verify', authRequired, async (req, res) => {
             amount: parseFloat(amount),
             transaction_ref,
             status: 'pending',
+            payment_notes: payment_notes || null,
+            proof_url: proof_url || null,
             created_at: new Date().toISOString()
+        });
+
+        const supermarketId = await inventory.getDefaultSupermarketId();
+        events.publish(events.EVENT_TYPES.PAYMENT_VERIFICATION_SUBMITTED, {
+            orderRef: order.order_ref,
+            customerName: order.customer_name,
+            customerPhone: order.customer_phone,
+            customerEmail: order.customer_email,
+            shippingAddress: order.shipping_address,
+            total: Number(order.total),
+            transactionRef: payment.transaction_ref,
+            paymentNotes: payment.payment_notes || '',
+            proofUrl: payment.proof_url || '',
+            submittedAt: payment.created_at,
+            paymentMethod: 'transfer',
+            paymentStatus: 'pending',
+            supermarketId
         });
 
         // Send verification email to owner via Brevo HTTP API (no SMTP, no EmailJS)
@@ -1383,24 +1416,154 @@ app.post('/api/payments/verify', authRequired, async (req, res) => {
     }
 });
 
+app.get('/api/payments/transfer-config', authRequired, async (req, res) => {
+    const bankName = process.env.BANK_NAME || '';
+    const accountName = process.env.BANK_ACCOUNT_NAME || '';
+    const accountNumber = process.env.BANK_ACCOUNT_NUMBER || '';
+    res.json({
+        configured: Boolean(bankName && accountName && accountNumber),
+        bank_name: bankName,
+        account_name: accountName,
+        account_number: accountNumber
+    });
+});
+
+async function resolveManualPayment(paymentId, outcome, actorUserId) {
+    const nextPaymentRecordStatus = outcome === 'paid' ? 'verified' : 'rejected';
+    const claimedPayment = await pool.query(
+        `UPDATE payment_verifications SET status = $2
+         WHERE id = $1 AND status = 'pending' RETURNING *`,
+        [String(paymentId), nextPaymentRecordStatus]
+    );
+    if (claimedPayment.rows.length === 0) {
+        const current = await db.getById('payment_verifications', paymentId);
+        return { duplicate: true, payment: current };
+    }
+
+    const payment = claimedPayment.rows[0];
+    const nextOrderStatus = outcome === 'paid' ? 'verified' : 'failed';
+    const orderResult = await pool.query(
+        `UPDATE orders SET payment_status = $2,
+             status = CASE WHEN $2 = 'verified' AND status = 'pending' THEN 'processing'
+                           WHEN $2 = 'failed' THEN 'failed' ELSE status END
+         WHERE order_ref = $1 AND payment_status = 'pending' RETURNING *`,
+        [payment.order_ref, nextOrderStatus]
+    );
+    const order = orderResult.rows[0] || await db.findBy('orders', o => o.order_ref === payment.order_ref);
+    if (!order) throw new Error('Order not found for payment verification');
+
+    const supermarketId = await inventory.getDefaultSupermarketId();
+    const payload = {
+        orderRef: order.order_ref,
+        customerName: order.customer_name,
+        customerPhone: order.customer_phone,
+        customerEmail: order.customer_email,
+        total: Number(order.total),
+        transactionRef: payment.transaction_ref,
+        paymentNotes: payment.payment_notes || '',
+        proofUrl: payment.proof_url || '',
+        processedAt: new Date().toISOString(),
+        provider: 'transfer',
+        supermarketId
+    };
+    if (outcome === 'paid') {
+        events.publish(events.EVENT_TYPES.PAYMENT_CONFIRMED, payload);
+    } else {
+        events.publish(events.EVENT_TYPES.PAYMENT_FAILED, payload);
+        await restoreStockForFailedPayment(order);
+    }
+    await logIntegration('transfer_payment_' + outcome, supermarketId, order.order_ref,
+        'payment verification ' + payment.id + ' by user ' + (actorUserId || 'system'));
+    return { duplicate: false, payment, order };
+}
+
+app.post('/api/admin/payments/:id/verify', authRequired, workerOrAdminRequired, async (req, res) => {
+    try {
+        const result = await resolveManualPayment(req.params.id, 'paid', req.user.id);
+        res.json({ message: result.duplicate ? 'Payment was already processed' : 'Payment verified', duplicate: result.duplicate, payment_status: 'verified', order_ref: result.payment && result.payment.order_ref });
+    } catch (err) {
+        console.error('Worker payment verification error:', err);
+        res.status(500).json({ error: 'Could not verify payment' });
+    }
+});
+
+app.post('/api/admin/payments/:id/reject', authRequired, workerOrAdminRequired, async (req, res) => {
+    try {
+        const result = await resolveManualPayment(req.params.id, 'failed', req.user.id);
+        res.json({ message: result.duplicate ? 'Payment was already processed' : 'Payment rejected', duplicate: result.duplicate, payment_status: 'failed', order_ref: result.payment && result.payment.order_ref });
+    } catch (err) {
+        console.error('Worker payment rejection error:', err);
+        res.status(500).json({ error: 'Could not reject payment' });
+    }
+});
+
+app.post('/api/admin/orders/:id/collect-cash', authRequired, workerOrAdminRequired, async (req, res) => {
+    try {
+        const claimed = await pool.query(
+            `UPDATE orders SET payment_status = 'verified',
+                 status = CASE WHEN status = 'pending' THEN 'processing' ELSE status END
+             WHERE id = $1 AND payment_method = 'cash' AND payment_status = 'pending' RETURNING *`,
+            [String(req.params.id)]
+        );
+        if (claimed.rows.length === 0) {
+            const current = await db.getById('orders', req.params.id);
+            if (!current) return res.status(404).json({ error: 'Order not found' });
+            return res.json({ message: 'Cash payment was already processed', duplicate: true, payment_status: current.payment_status });
+        }
+        const order = claimed.rows[0];
+        const supermarketId = await inventory.getDefaultSupermarketId();
+        events.publish(events.EVENT_TYPES.COD_PAYMENT_COLLECTED, {
+            orderRef: order.order_ref,
+            customerName: order.customer_name,
+            customerPhone: order.customer_phone,
+            customerEmail: order.customer_email,
+            total: Number(order.total),
+            provider: 'cash',
+            paymentStatus: 'verified',
+            collectedAt: new Date().toISOString(),
+            supermarketId
+        });
+        events.publish(events.EVENT_TYPES.PAYMENT_CONFIRMED, {
+            orderRef: order.order_ref,
+            customerName: order.customer_name,
+            customerPhone: order.customer_phone,
+            customerEmail: order.customer_email,
+            total: Number(order.total),
+            provider: 'cash',
+            paymentStatus: 'verified',
+            supermarketId
+        });
+        res.json({ message: 'Cash payment collected', payment_status: 'verified' });
+    } catch (err) {
+        console.error('COD collection error:', err);
+        res.status(500).json({ error: 'Could not collect cash payment' });
+    }
+});
+
+app.get('/api/admin/payments/pending', authRequired, workerOrAdminRequired, async (req, res) => {
+    try {
+        const payments = await db.findAll('payment_verifications', p => p.status === 'pending');
+        const orders = await db.getAll('orders');
+        const orderMap = {};
+        orders.forEach(order => { orderMap[order.order_ref] = order; });
+        res.json({ payments: payments.map(payment => ({
+            ...payment,
+            order: orderMap[payment.order_ref] || null
+        })) });
+    } catch (err) {
+        console.error('Pending payments error:', err);
+        res.status(500).json({ error: 'Could not load pending payments' });
+    }
+});
+
 // Verify payment (from email button)
 app.get('/api/payments/verify/:id', async (req, res) => {
     try {
         const payment = await db.getById('payment_verifications', req.params.id);
         if (!payment) return res.status(404).send('Payment verification not found');
-        if (payment.status !== 'pending') return res.status(409).send('Payment verification has already been processed');
-
-        await db.update('payment_verifications', payment.id, { status: 'verified' });
-
-        // Update order payment status
-        const order = await db.findBy('orders', o => o.order_ref === payment.order_ref);
-        if (order) {
-            const updatedOrder = await db.update('orders', order.id, {
-                payment_status: 'verified',
-                status: order.status === 'pending' ? 'processing' : order.status
-            });
-            sendEmailInBackground(emailService.sendOrderStatusEmail(updatedOrder));
-        }
+        const result = await resolveManualPayment(payment.id, 'paid', 'email');
+        if (result.duplicate) return res.status(409).send('Payment verification has already been processed');
+        sendEmailInBackground(emailService.sendOrderStatusEmail(result.order));
 
         res.send(`
             <!DOCTYPE html>
@@ -1427,9 +1590,9 @@ app.get('/api/payments/reject/:id', async (req, res) => {
     try {
         const payment = await db.getById('payment_verifications', req.params.id);
         if (!payment) return res.status(404).send('Payment verification not found');
-        if (payment.status !== 'pending') return res.status(409).send('Payment verification has already been processed');
-
-        await db.update('payment_verifications', payment.id, { status: 'rejected' });
+        const result = await resolveManualPayment(payment.id, 'failed', 'email');
+        if (result.duplicate) return res.status(409).send('Payment verification has already been processed');
+        sendEmailInBackground(emailService.sendOrderStatusEmail(result.order));
 
         res.send(`
             <!DOCTYPE html>
@@ -1531,11 +1694,11 @@ async function emitPaymentConfirmed(order) {
 /** Restore reserved stock when a payment definitively failed (once only). */
 async function restoreStockForFailedPayment(order) {
     try {
-        const alreadyRestored = await db.withTransaction(client => inventory.hasCancelledRestore(client, order.order_ref));
-        if (alreadyRestored) return;
         let items = [];
         try { items = JSON.parse(order.items || '[]'); } catch (e) { items = []; }
         const restored = await db.withTransaction(async client => {
+            const alreadyRestored = await inventory.hasCancelledRestore(client, order.order_ref);
+            if (alreadyRestored) return [];
             const sid = await inventory.getDefaultSupermarket(client);
             return inventory.restoreCancelledOrder(client, {
                 supermarketId: sid,
@@ -1666,8 +1829,8 @@ app.post('/api/webhooks/flutterwave', async (req, res) => {
         }
 
         // Never trust the payload amount alone — re-verify with the API.
-        let verified = data.status === 'successful';
-        if (verified && FLW_SECRET_KEY && data.id) {
+        let verified = false;
+        if (data.status === 'successful' && FLW_SECRET_KEY && data.id) {
             try {
                 const tx = await flwVerifyTransaction(data.id);
                 verified = tx.status === 'successful'

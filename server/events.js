@@ -28,7 +28,10 @@ const EVENT_TYPES = {
     ONLINE_ORDER_CREATED: 'online_order_created',
     PHYSICAL_SALE_RECORDED: 'physical_sale_recorded',
     ORDER_CANCELLED: 'order_cancelled',
-    PAYMENT_CONFIRMED: 'payment_confirmed'
+    PAYMENT_CONFIRMED: 'payment_confirmed',
+    PAYMENT_VERIFICATION_SUBMITTED: 'payment_verification_submitted',
+    PAYMENT_FAILED: 'payment_failed',
+    COD_PAYMENT_COLLECTED: 'cod_payment_collected'
 };
 
 /**

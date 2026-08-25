@@ -107,15 +107,16 @@
                             <span class="pay-label">Card / Online (Flutterwave)</span>
                         </label>
                     </div>
+                    <div id="codPaymentInfo" class="payment-status">Cash on delivery: payment will be collected when your order arrives.</div>
 
                     <!-- Transaction Panel (Payment Verification Modal) -->
                     <div id="paymentModal" class="payment-modal" aria-hidden="true">
                         <div class="payment-modal__panel">
                             <button type="button" class="payment-modal__close" id="closePaymentModal" title="Close">&times;</button>
                             <h3>Transaction Panel</h3>
-                            <p>Send payment to the OPAY account below to complete your order.</p>
-                            <p><strong>OPAY Number:</strong> 7039245529</p>
-                            <p>Enter the details of your transaction below so we can verify it.</p>
+                            <p id="transferInstructions">Loading configured bank transfer instructions...</p>
+                            <div id="transferAccountDetails"></div>
+                            <p>Submit your reference after transferring. Your payment remains pending until a worker verifies it.</p>
 
                             <label for="payerPhoneInput">Your Phone (used for verification)</label>
                             <input id="payerPhoneInput" type="text" placeholder="e.g. 08012345678" />
@@ -125,6 +126,9 @@
 
                             <label for="paymentRefInput">Transaction Reference</label>
                             <input id="paymentRefInput" type="text" placeholder="Provider transaction reference" />
+
+                            <label for="paymentNotesInput">Payment notes or proof link</label>
+                            <textarea id="paymentNotesInput" placeholder="Optional notes or a link to payment proof"></textarea>
 
                             <div class="payment-modal__actions">
                                 <button type="button" id="confirmPaidBtn" class="checkout-btn" style="flex:1;background:var(--c-accent);">Verify Payment</button>
@@ -169,6 +173,7 @@
             var CONFIRM_PAID_BTN_ID = "confirmPaidBtn";
             var CLOSE_PAYMENT_MODAL_IDS = ["closePaymentModal", "closePaymentModalBtn"];
             var PAYMENT_STATUS_ID = "paymentStatus";
+            var transferConfigured = false;
 
             // ---- Open / close payment modal ----
             function openPaymentModal() {
@@ -236,6 +241,11 @@
                 var paymentMethod = document.querySelector("input[name='payment']:checked").value;
 
                 if (paymentMethod === "transfer") {
+                    if (!transferConfigured) {
+                        showToast("Bank transfer is currently unavailable. Please choose another payment method.", "error");
+                        openPaymentModal();
+                        return;
+                    }
                     showToast("Use Verify Payment to submit your transfer", "error");
                     openPaymentModal();
                     return;
@@ -250,6 +260,7 @@
                         customer_email: email,
                         customer_phone: phone,
                         shipping_address: address,
+                        customer_notes: paymentMethod === "cash" ? "Cash on delivery order" : "",
                         payment_method: paymentMethod,
                         items: cart,
                         total: total
@@ -268,7 +279,7 @@
                     }
 
                     showToast("Order placed successfully!", "success");
-                    window.location.href = "finally.html?ref=" + encodeURIComponent(result.orderRef) + "&payment=cash";
+                    window.location.href = "finally.html?ref=" + encodeURIComponent(result.orderRef) + "&payment=" + encodeURIComponent(paymentMethod);
                 } catch (err) {
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Place Order"; }
                     showToast(err.message || "Failed to place order", "error");
@@ -333,6 +344,13 @@
                         options.forEach(function (o) { o.classList.remove("selected"); });
                         var label = document.querySelector("label[for='" + this.id + "']");
                         if (label) label.classList.add("selected");
+                        var codInfo = document.getElementById("codPaymentInfo");
+                        if (codInfo) {
+                            codInfo.textContent = this.value === "cash" ? "Cash on delivery: payment will be collected when your order arrives."
+                                : this.value === "transfer" ? "Bank transfer: submit your reference for worker verification."
+                                    : "Pay securely with Flutterwave using the official hosted checkout.";
+                        }
+                        if (this.value === "transfer") openPaymentModal();
                     });
                 });
             }
@@ -380,6 +398,7 @@
                 var phone = document.getElementById("payerPhoneInput") ? document.getElementById("payerPhoneInput").value.trim() : "";
                 var amount = document.getElementById("paymentAmountInput") ? document.getElementById("paymentAmountInput").value.trim() : "";
                 var ref = document.getElementById("paymentRefInput") ? document.getElementById("paymentRefInput").value.trim() : "";
+                var paymentNotes = document.getElementById("paymentNotesInput") ? document.getElementById("paymentNotesInput").value.trim() : "";
                 var btn = document.getElementById(CONFIRM_PAID_BTN_ID);
 
                 var name = document.getElementById("shipping_name").value.trim();
@@ -403,6 +422,7 @@
                     var cart = await getCartItems();
                     var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
                     if (cart.length === 0) throw new Error("Your cart is empty");
+                    if (!transferConfigured) throw new Error("Bank transfer is currently unavailable. Please choose another payment method.");
                     if (Math.abs(Number(amount) - total) > 0.01) {
                         throw new Error("The amount paid must match the order total.");
                     }
@@ -412,6 +432,7 @@
                         customer_email: email,
                         customer_phone: shippingPhone,
                         shipping_address: address,
+                        customer_notes: paymentNotes,
                         payment_method: "transfer",
                         items: cart,
                         total: total
@@ -423,7 +444,8 @@
                         payer_email: email,
                         payer_phone: phone,
                         amount: parseFloat(amount),
-                        transaction_ref: ref
+                        transaction_ref: ref,
+                        payment_notes: paymentNotes
                     });
 
                     await apiSaveCart([]);
@@ -448,6 +470,22 @@
                 updateAuthUI();
                 updateOrderSummary();
                 setupPaymentOptions();
+                apiGetTransferConfig().then(function (config) {
+                    transferConfigured = !!config.configured;
+                    var instructions = document.getElementById("transferInstructions");
+                    var details = document.getElementById("transferAccountDetails");
+                    if (!transferConfigured) {
+                        if (instructions) instructions.textContent = "Bank transfer is currently unavailable. Please choose another payment method.";
+                        if (details) details.textContent = "";
+                        return;
+                    }
+                    if (instructions) instructions.textContent = "Transfer the exact order amount to the configured account below.";
+                    if (details) details.innerHTML = "<p><strong>Bank:</strong> " + config.bank_name + "<br><strong>Account name:</strong> " + config.account_name + "<br><strong>Account number:</strong> " + config.account_number + "</p>";
+                }).catch(function () {
+                    transferConfigured = false;
+                    var instructions = document.getElementById("transferInstructions");
+                    if (instructions) instructions.textContent = "Bank transfer details could not be loaded. Please choose another payment method.";
+                });
 
                 // Pre-fill from user profile
                 var user = getCurrentUser();

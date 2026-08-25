@@ -651,6 +651,16 @@
                     </table>
                 </div>
             </div>
+            <div class="admin-card" style="margin-top:24px;">
+                <h2>💳 Pending Transfer Payments</h2>
+                <p class="sub">Review customer-submitted transfer references. Verification keeps the payment pending until approved.</p>
+                <div style="overflow-x:auto;">
+                    <table class="report-table">
+                        <thead><tr><th>Order</th><th>Customer</th><th>Amount</th><th>Reference</th><th>Notes</th><th>Submitted</th><th>Action</th></tr></thead>
+                        <tbody id="workerPendingPaymentsBody"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 <!-- Inventory Tab (staff) -->
         <div id="tab-inventory" class="admin-tab-content" style="display:none;">
@@ -890,7 +900,7 @@ function switchWorkerTab(tabName) {
     });
     document.getElementById("tab-" + tabName).style.display = "block";
 
-    if (tabName === "orders") loadWorkerOrders();
+    if (tabName === "orders") { loadWorkerOrders(); loadWorkerPendingPayments(); }
     if (tabName === "inventory") loadWorkerInventory();
 }
 
@@ -945,17 +955,53 @@ function loadWorkerInventory() {
 var workerSaleSession = []; // [{ productId, name, unitPrice, quantity, available }]
 
 function addWorkerSaleProduct(p, purchaseType) {
+    console.log("addWorkerSaleProduct() called", { product: p, purchaseType: purchaseType });
+    if (!p || p.id === undefined || p.id === null) {
+        console.error("addWorkerSaleProduct(): product is missing a valid ID", p);
+        showToast('Could not add product: invalid product data', 'error');
+        return;
+    }
     var carton = purchaseType === 'carton';
+    var cartonEnabled = p.carton_enabled === true || Number(p.carton_enabled) === 1;
     var units = carton ? Number(p.units_per_carton) : 1;
     var priceValue = carton ? Number(p.carton_price) : Number(p.price);
-    if (carton && (!p.carton_enabled || !units || !p.carton_price)) { showToast('Carton purchase is not available', 'error'); return; }
+    if (carton && (!cartonEnabled || !units || !p.carton_price)) { showToast('Carton purchase is not available', 'error'); return; }
     var existing = workerSaleSession.find(function (l) { return String(l.productId) === String(p.id) && l.purchaseType === purchaseType; });
     if (existing) {
         if (existing.quantity >= existing.available) { showToast('Not enough stock available', 'error'); return; }
         existing.quantity += 1;
     }
     else workerSaleSession.push({ productId: p.id, name: p.name, unitPrice: priceValue, quantity: 1, available: Math.floor(Number(p.stock_available) / units), purchaseType: purchaseType, unitsPerCarton: units });
+    console.log("workerSaleSession changed", workerSaleSession);
     renderWorkerSaleSession();
+}
+
+async function addWorkerSaleProductById(productId, purchaseType) {
+    console.log("addWorkerSaleProductById() called", { productId: productId, purchaseType: purchaseType });
+    var key = String(productId === undefined || productId === null ? '' : productId).trim();
+    if (!key || key === 'undefined' || key === 'null' || key === '[object Object]') {
+        console.error("Product lookup failed: invalid product ID", productId);
+        showToast('Could not add product: invalid product ID', 'error');
+        return;
+    }
+
+    var product = window.workerSearchProducts && window.workerSearchProducts[key];
+    if (product) {
+        console.log("Product found in workerSearchProducts", product);
+        addWorkerSaleProduct(product, purchaseType);
+        return;
+    }
+
+    console.log("Product not in workerSearchProducts; retrieving product", key);
+    try {
+        product = await apiGetProduct(key);
+        if (!product) throw new Error('Product not found: ' + key);
+        console.log("Product retrieved from API", product);
+        addWorkerSaleProduct(product, purchaseType);
+    } catch (err) {
+        console.error("Product lookup failed", err);
+        showToast(err.message || 'Could not load product', 'error');
+    }
 }
 
 var workerSearchTimer;
@@ -965,13 +1011,26 @@ function searchWorkerProducts(value) {
     if (!value.trim()) { box.innerHTML = ''; return; }
     workerSearchTimer = setTimeout(function () {
         apiSearchProducts(value.trim()).then(function (products) {
-            box.innerHTML = products.map(function (p) { var id = JSON.stringify(String(p.id)); return '<div class="admin-product-item"><div class="info"><h4>' + p.name + '</h4><span class="cat">' + price(p.price) + ' • Stock: ' + p.stock_available + '</span></div><button class="admin-btn" style="width:auto;margin:0" onclick="addWorkerSaleProduct(window.workerSearchProducts[' + id + '],\'unit\')">Add unit</button>' + (p.carton_enabled ? '<button class="admin-btn green" style="width:auto;margin:0" onclick="addWorkerSaleProduct(window.workerSearchProducts[' + id + '],\'carton\')">Add carton</button>' : '') + '</div>'; }).join('') || '<p class="sub">Product not found</p>';
+            box.innerHTML = products.map(function (p) { var id = String(p.id); var cartonEnabled = p.carton_enabled === true || Number(p.carton_enabled) === 1; return '<div class="admin-product-item"><div class="info"><h4>' + p.name + '</h4><span class="cat">' + price(p.price) + ' • Stock: ' + p.stock_available + '</span></div><button type="button" class="admin-btn worker-add-sale" data-product-id="' + id + '" data-purchase-type="unit" style="width:auto;margin:0">Add unit</button>' + (cartonEnabled ? '<button type="button" class="admin-btn green worker-add-sale" data-product-id="' + id + '" data-purchase-type="carton" style="width:auto;margin:0">Add carton</button>' : '') + '</div>'; }).join('') || '<p class="sub">Product not found</p>';
             window.workerSearchProducts = {}; products.forEach(function (p) { window.workerSearchProducts[String(p.id)] = p; });
         }).catch(function (err) { box.innerHTML = '<p class="sub">' + err.message + '</p>'; });
     }, 250);
 }
 
+document.getElementById('worker-product-results').addEventListener('click', function (event) {
+    var button = event.target.closest('.worker-add-sale');
+    if (!button) return;
+    event.preventDefault();
+    var productId = button.dataset.productId;
+    var purchaseType = button.dataset.purchaseType;
+    console.log("ADD UNIT CLICKED");
+    console.log("PRODUCT ID:", productId);
+    console.log("PURCHASE TYPE:", purchaseType);
+    addWorkerSaleProductById(productId, purchaseType);
+});
+
 function renderWorkerSaleSession() {
+    console.log("renderWorkerSale() called", workerSaleSession);
     var box = document.getElementById("worker-sale-session");
     var totalEl = document.getElementById("worker-sale-total");
     if (!box) return;
@@ -995,6 +1054,7 @@ function renderWorkerSaleSession() {
             '</div>';
     });
     box.innerHTML = html;
+    console.log("Current sale DOM updated", box.innerHTML);
     var total = workerSaleSession.reduce(function (s, l) { return s + l.unitPrice * l.quantity; }, 0);
     if (totalEl) totalEl.textContent = price(total);
 }
@@ -1107,25 +1167,55 @@ function showWorkerOrderNotification(payload) {
     workerSeenOrderRefs[payload.orderRef] = true;
 
     var lines = (payload.items || []).map(function (i) {
-        return '<div>• ' + i.name + ' × ' + i.quantity + '</div>';
+        return '<div>' + i.name + ' × ' + i.quantity + '</div>';
     }).join('');
+    var methodLabel = payload.paymentMethod === 'cash' ? 'CASH ON DELIVERY' : payload.paymentMethod === 'transfer' ? 'BANK TRANSFER' : 'FLUTTERWAVE';
 
     var card = document.createElement('div');
     card.className = 'admin-card2';
     card.style.marginBottom = '12px';
     card.style.borderColor = '#16a34a';
     card.innerHTML =
-        '<h2 style="margin-bottom:4px;">🔔 NEW ONLINE ORDER</h2>' +
+        '<h2 style="margin-bottom:4px;">NEW ONLINE ORDER — ' + methodLabel + '</h2>' +
         '<div style="font-weight:700;margin-bottom:6px;">Order #' + payload.orderRef + '</div>' +
+        '<div>' + (payload.customerName || '') + ' · ' + (payload.customerPhone || '') + '</div>' +
+        '<div>' + (payload.customerEmail || '') + '</div>' +
+        '<div>Deliver to: ' + (payload.shippingAddress || '') + '</div>' +
         lines +
         '<div style="margin-top:6px;"><strong>Total: ₦' + Number(payload.total).toLocaleString() + '</strong></div>' +
-        '<div style="margin-top:4px;color:#16a34a;font-weight:600;">Status: NEW ORDER</div>';
+        '<div>Payment: ' + (payload.paymentStatus || 'pending').toUpperCase() + '</div>' +
+        '<div>Order time: ' + new Date(payload.orderTime || Date.now()).toLocaleString() + '</div>' +
+        (payload.customerNotes ? '<div>Notes: ' + payload.customerNotes + '</div>' : '');
 
     banner.appendChild(card);
     showToast("New online order #" + payload.orderRef, "success");
 
     setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
     if (typeof loadWorkerOrders === "function") loadWorkerOrders();
+}
+
+function showWorkerPaymentNotification(payload, title, color) {
+    var banner = document.getElementById("worker-order-notifications");
+    if (!banner || !payload.orderRef) return;
+    var key = title + ':' + payload.orderRef + ':' + (payload.transactionRef || '');
+    if (workerSeenOrderRefs[key]) return;
+    workerSeenOrderRefs[key] = true;
+    var card = document.createElement('div');
+    card.className = 'admin-card2';
+    card.style.marginBottom = '12px';
+    card.style.borderColor = color || '#ff7a00';
+    card.innerHTML = '<h2 style="margin-bottom:4px;">' + title + '</h2>' +
+        '<div><strong>Order #' + payload.orderRef + '</strong></div>' +
+        '<div>' + (payload.customerName || '') + ' · ' + (payload.customerPhone || '') + '</div>' +
+        '<div>' + (payload.customerEmail || '') + '</div>' +
+        '<div>Amount: ₦' + Number(payload.total || 0).toLocaleString() + '</div>' +
+        (payload.transactionRef ? '<div>Reference: ' + payload.transactionRef + '</div>' : '') +
+        (payload.paymentNotes ? '<div>Notes: ' + payload.paymentNotes + '</div>' : '') +
+        '<div>Submitted: ' + new Date(payload.submittedAt || payload.processedAt || Date.now()).toLocaleString() + '</div>';
+    banner.appendChild(card);
+    setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
+    loadWorkerOrders();
+    loadWorkerPendingPayments();
 }
 
 (function startWorkerOrderStream() {
@@ -1156,6 +1246,15 @@ function showWorkerOrderNotification(payload) {
                 setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
                 if (typeof loadWorkerOrders === "function") loadWorkerOrders();
             } catch (err) {}
+        });
+        stream.addEventListener('payment_verification_submitted', function (e) {
+            try { showWorkerPaymentNotification(JSON.parse(e.data), 'TRANSFER PAYMENT PENDING', '#ff7a00'); } catch (err) {}
+        });
+        stream.addEventListener('payment_failed', function (e) {
+            try { showWorkerPaymentNotification(JSON.parse(e.data), 'PAYMENT FAILED', '#e53935'); } catch (err) {}
+        });
+        stream.addEventListener('cod_payment_collected', function (e) {
+            try { showWorkerPaymentNotification(JSON.parse(e.data), 'COD PAYMENT COLLECTED', '#16a34a'); } catch (err) {}
         });
         stream.addEventListener('physical_sale_recorded', function () {
             var tab = document.getElementById("tab-inventory");
@@ -1189,22 +1288,78 @@ function loadWorkerOrders() {
         }
         orders.forEach(function (order) {
             var tr = document.createElement("tr");
-            var paymentBadge = order.payment_method === 'cash' ? '💵 Cash' : '🏦 Transfer';
+            var paymentBadge = order.payment_method === 'cash' ? '💵 CASH ON DELIVERY' : order.payment_method === 'transfer' ? '🏦 BANK TRANSFER' : '💳 FLUTTERWAVE';
             var statusBadge = order.status || 'pending';
+            var paymentStatusLabel = order.payment_status === 'verified' ? 'PAID' : (order.payment_status || 'pending').toUpperCase();
             var statusColor = order.status === 'completed' ? '#4caf50' : order.status === 'cancelled' ? '#e53935' : '#ff7a00';
+            var action = '<button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" data-oid="' + order.id + '" onclick="openWorkerOrderUpdate(this.dataset.oid)">Update</button>';
+            if (order.payment_method === 'cash' && order.payment_status === 'pending') {
+                action += ' <button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" data-oid="' + order.id + '" onclick="collectWorkerCash(this.dataset.oid)">Collect cash</button>';
+            }
+            var items = [];
+            try { items = JSON.parse(order.items || '[]'); } catch (e) {}
             tr.innerHTML =
                 '<td><strong>' + order.order_ref + '</strong></td>' +
-                '<td>' + order.customer_name + '<br><small style="color:#999;">' + order.customer_email + '</small></td>' +
+                '<td>' + order.customer_name + '<br><small style="color:#999;">' + order.customer_phone + '<br>' + order.customer_email + '<br>' + order.shipping_address + '</small></td>' +
                 '<td>₦' + Number(order.total).toLocaleString() + '</td>' +
-                '<td>' + paymentBadge + ' <small>(' + (order.payment_status || 'pending') + ')</small></td>' +
+                '<td>' + paymentBadge + ' <small>(' + paymentStatusLabel + ')</small></td>' +
                 '<td><span style="color:' + statusColor + ';font-weight:600;">' + statusBadge + '</span></td>' +
                 '<td>' + new Date(order.created_at).toLocaleDateString() + '</td>' +
-                '<td><button class="admin-btn green" style="width:auto;padding:6px 14px;font-size:12px;" data-oid="' + order.id + '" onclick="openWorkerOrderUpdate(this.dataset.oid)">Update</button></td>';
+                '<td>' + items.map(function (item) { return item.name + ' × ' + item.quantity; }).join('<br>') + '<br>' + action + '</td>';
             tbody.appendChild(tr);
         });
     }).catch(function (err) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">Failed to load orders: ' + err.message + '</td></tr>';
     });
+}
+
+function loadWorkerPendingPayments() {
+    var tbody = document.getElementById('workerPendingPaymentsBody');
+    if (!tbody) return;
+    apiGetPendingPayments().then(function (payments) {
+        tbody.innerHTML = '';
+        if (!payments.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#999;padding:20px;">No pending transfer payments.</td></tr>';
+            return;
+        }
+        payments.forEach(function (payment) {
+            var order = payment.order || {};
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + payment.order_ref + '</td>' +
+                '<td>' + (order.customer_name || '') + '<br><small>' + (order.customer_phone || '') + '<br>' + (order.customer_email || '') + '</small></td>' +
+                '<td>₦' + Number(payment.amount).toLocaleString() + '</td>' +
+                '<td>' + payment.transaction_ref + '</td>' +
+                '<td>' + (payment.payment_notes || '') + (payment.proof_url ? '<br>' + payment.proof_url : '') + '</td>' +
+                '<td>' + new Date(payment.created_at).toLocaleString() + '</td>' +
+                '<td><button class="admin-btn green" style="width:auto;padding:6px 10px;font-size:12px;" onclick="verifyWorkerPayment(this.dataset.pid)" data-pid="' + payment.id + '">VERIFY PAYMENT</button> <button class="admin-btn secondary" style="width:auto;padding:6px 10px;font-size:12px;" onclick="rejectWorkerPayment(this.dataset.pid)" data-pid="' + payment.id + '">REJECT PAYMENT</button></td>';
+            tbody.appendChild(tr);
+        });
+    }).catch(function (err) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:#e53935;">' + err.message + '</td></tr>';
+    });
+}
+
+function verifyWorkerPayment(id) {
+    apiVerifyWorkerPayment(id).then(function () {
+        showToast('Payment verified', 'success');
+        loadWorkerOrders();
+        loadWorkerPendingPayments();
+    }).catch(function (err) { showToast(err.message || 'Could not verify payment', 'error'); });
+}
+
+function rejectWorkerPayment(id) {
+    apiRejectWorkerPayment(id).then(function () {
+        showToast('Payment rejected', 'success');
+        loadWorkerOrders();
+        loadWorkerPendingPayments();
+    }).catch(function (err) { showToast(err.message || 'Could not reject payment', 'error'); });
+}
+
+function collectWorkerCash(id) {
+    apiCollectCashPayment(id).then(function () {
+        showToast('Cash payment collected', 'success');
+        loadWorkerOrders();
+    }).catch(function (err) { showToast(err.message || 'Could not collect cash', 'error'); });
 }
 
 /* ===== Open order update for worker ===== */

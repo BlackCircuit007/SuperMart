@@ -1,6 +1,6 @@
 /* LordTempsMart service worker — enables one-click "Install app" and an
  * offline shell. API calls are NEVER cached (always live data). */
-const CACHE_NAME = 'lordtempsmart-v1';
+const CACHE_NAME = 'lordtempsmart-v2';
 
 const CORE_ASSETS = [
     '/',

@@ -249,6 +249,27 @@ async function apiSubmitPaymentVerification(details) {
     });
 }
 
+async function apiGetTransferConfig() {
+    return apiRequest('/api/payments/transfer-config');
+}
+
+async function apiVerifyWorkerPayment(id) {
+    return apiRequest('/api/admin/payments/' + id + '/verify', { method: 'POST' });
+}
+
+async function apiRejectWorkerPayment(id) {
+    return apiRequest('/api/admin/payments/' + id + '/reject', { method: 'POST' });
+}
+
+async function apiCollectCashPayment(id) {
+    return apiRequest('/api/admin/orders/' + id + '/collect-cash', { method: 'POST' });
+}
+
+async function apiGetPendingPayments() {
+    const data = await apiRequest('/api/admin/payments/pending');
+    return data.payments || [];
+}
+
 // ===== Worker API (Admin only) =====
 async function apiAddWorker(name, email) {
     return apiRequest('/api/admin/workers', {

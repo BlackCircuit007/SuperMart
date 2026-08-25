@@ -75,6 +75,7 @@ async function createTables() {
         // remains the single source of truth for paid/not-paid.
         await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_provider TEXT`);
         await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_transaction_id TEXT`);
+        await client.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_notes TEXT`);
 
         // Verification codes table
         await client.query(`
@@ -126,6 +127,8 @@ async function createTables() {
                 created_at TEXT NOT NULL
             )
         `);
+        await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS payment_notes TEXT`);
+        await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS proof_url TEXT`);
 
         // Carts table
         await client.query(`

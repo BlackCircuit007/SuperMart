@@ -315,6 +315,11 @@ async function apiGetAdminReportSummary(from, to) {
     return apiRequest('/api/admin/reports/summary?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to));
 }
 
+async function apiGetPhysicalSales() {
+    const data = await apiRequest('/api/admin/physical-sales');
+    return data.sales || [];
+}
+
 // ===== Inventory API (staff dashboard + physical sales) =====
 async function apiGetInventory() {
     return apiRequest('/api/admin/inventory');

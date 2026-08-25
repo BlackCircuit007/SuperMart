@@ -652,7 +652,8 @@ app.get('/api/products/:id', async (req, res) => {
 });
 
 // Add product (admin & worker)
-app.post('/api/products', authRequired, adminRequired, async (req, res) => {
+// Workers upload products; ONLY admins may edit/delete stock/price (#integrity).
+app.post('/api/products', authRequired, workerOrAdminRequired, async (req, res) => {
     try {
         const { name, category, price, rating, description, image, gallery, featured, stock,
             sku, barcode, qr_identifier, active, carton_enabled, units_per_carton, carton_price } = req.body;
@@ -1134,6 +1135,25 @@ app.get('/api/admin/integration-logs', authRequired, adminRequired, async (req, 
     } catch (err) {
         console.error('integration logs error:', err);
         res.status(500).json({ error: 'Server error loading integration logs' });
+    }
+});
+
+// Dedicated Physical Sales report for admins. Each row is a recorded counter sale
+// (the same data captured at the POS), listed independently of stock movements so
+// admins can audit physical revenue by worker.
+app.get('/api/admin/physical-sales', authRequired, adminRequired, async (req, res) => {
+    try {
+        const limit = Math.min(500, Number(req.query.limit) || 200);
+        const rows = await pool.query(
+            `SELECT id, sale_ref, supermarket_id, actor_user_id, actor_name, actor_worker_type,
+                    payment_method, amount_paid, change_due, total, items, created_at
+             FROM physical_sales
+             ORDER BY created_at DESC, id DESC
+             LIMIT $1`, [limit]);
+        res.json({ sales: rows.rows });
+    } catch (err) {
+        console.error('Physical sales list error:', err);
+        res.status(500).json({ error: 'Server error loading physical sales' });
     }
 });
 

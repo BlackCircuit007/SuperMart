@@ -353,6 +353,21 @@ function setupPasswordStrength() {
 
 /* ===== DOM Ready ===== */
 window.addEventListener("DOMContentLoaded", function () {
+    // Integrity: a logged-in worker must stay on their dashboard. They are not
+    // allowed to browse the storefront or admin pages with their worker session;
+    // they may only reach login/register/verify so they can create a normal buyer
+    // account if they wish to shop. The server independently enforces role rights
+    // (workers can only use worker-scoped endpoints; product edit/delete is admin-only).
+    (function enforceWorkerRoleAccess() {
+        var user = getCurrentUser();
+        if (!user || user.role !== 'worker') return;
+        var page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+        var allowed = ['worker.html', 'login.html', 'register.html', 'verify.html'];
+        if (allowed.indexOf(page) === -1) {
+            window.location.replace('worker.html');
+        }
+    })();
+
     initTheme();
     initBackToTop();
     updateAuthUI();

@@ -458,6 +458,96 @@
             .admin-product-item .info { flex-basis: 100%; }
             .admin-product-item { flex-direction: column; text-align: center; }
         }
+
+        /* ===== Responsive tables (mobile) ===== */
+        /* Tables keep their natural width and scroll horizontally inside their
+           overflow wrapper instead of squishing the screen. */
+        @media (max-width: 720px) {
+            .report-table { min-width: 720px; }
+            .report-table th, .report-table td { white-space: nowrap; }
+        }
+
+        /* ===== Barcode quick-add (scanned, not-yet-registered product) ===== */
+        .worker-quick-add {
+            margin: 10px 0;
+            padding: 14px;
+            border: 1px dashed var(--c-primary);
+            border-radius: 10px;
+            background: rgba(252, 104, 63, 0.04);
+        }
+        .worker-quick-add input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--c-border);
+            border-radius: 8px;
+            font-size: 14px;
+            margin: 6px 0;
+            box-sizing: border-box;
+            background: var(--c-card-bg);
+            color: var(--c-text);
+        }
+        body.dark-mode .worker-quick-add input {
+            background: var(--c-dark-card-bg);
+            border-color: var(--c-dark-border);
+            color: var(--c-dark-text);
+        }
+        .worker-quick-add .qa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .worker-quick-add .qa-grid input { margin: 0; }
+        .worker-quick-add .qa-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        @media (max-width: 480px) { .worker-quick-add .qa-grid { grid-template-columns: 1fr; } }
+
+        /* ===== Receipt preview modal + printing ===== */
+        .receipt-modal {
+            position: fixed; inset: 0; z-index: 2000;
+            background: rgba(0,0,0,0.55);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .receipt-modal__panel {
+            background: #fff; color: #111;
+            border-radius: 12px; width: 100%; max-width: 420px;
+            max-height: 90vh; overflow-y: auto;
+            padding: 18px; box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+        }
+        .receipt-modal__close {
+            background: none; border: none; font-size: 26px; line-height: 1;
+            float: right; cursor: pointer; color: #666; padding: 0 2px;
+        }
+        .receipt-modal__panel h3 { margin: 0 0 4px; color: #111; font-size: 16px; }
+        .receipt-modal__panel > .sub { margin: 0 0 12px; color: #555; font-size: 13px; }
+        .receipt-print {
+            background: #fff; color: #000; font-family: "Courier New", monospace;
+            width: 100%; max-width: 300px; margin: 10px auto; padding: 14px 12px;
+            border: 1px dashed #bbb; box-sizing: border-box; font-size: 12px; line-height: 1.45;
+        }
+        .receipt-print .rp-head { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+        .receipt-print .rp-head h4 { margin: 0 0 2px; font-size: 15px; }
+        .receipt-print .rp-head div { font-size: 11px; }
+        .receipt-print .rp-row { display: flex; justify-content: space-between; }
+        .receipt-print .rp-items, .receipt-print .rp-copydivider { border-top: 1px dashed #000; border-bottom: 1px dashed #000; margin: 6px 0; padding: 6px 0; }
+        .receipt-print table.rp-items { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .receipt-print table.rp-items td, .receipt-print table.rp-items th { padding: 2px 0; text-align: left; }
+        .receipt-print th.qty, .receipt-print td.qty { text-align: center; }
+        .receipt-print th.amt, .receipt-print td.amt { text-align: right; }
+        .receipt-print .rp-total { font-weight: 700; font-size: 13px; }
+        .receipt-print .rp-footer { text-align: center; margin-top: 8px; font-size: 10px; }
+        .receipt-print .rp-copy { text-align: center; font-weight: 700; letter-spacing: 1px; margin: 10px 0 4px; border-top: 1px dashed #000; padding-top: 8px; }
+        .receipt-print .rp-thanks { text-align: center; margin-top: 2px; }
+        .receipt-actions { display: flex; gap: 10px; margin-top: 16px; }
+        .receipt-actions .admin-btn { flex: 1; margin: 0; }
+        .admin-btn.secondary {
+            background: #f0f2f5; color: #333; border: 1px solid #ddd;
+        }
+        body.dark-mode .admin-btn.secondary { background: #2a2a2a; color: #ddd; border-color: #444; }
+
+        @media print {
+            body * { visibility: hidden; }
+            .receipt-modal, .receipt-modal * { visibility: visible; }
+            .receipt-modal { position: static; background: #fff; padding: 0; }
+            .receipt-modal__panel { box-shadow: none; max-height: none; overflow: visible; max-width: 100%; border-radius: 0; }
+            .receipt-modal__close, .receipt-actions, .receipt-modal__panel h3 { display: none !important; }
+            .receipt-print { border: none; margin: 0 auto; max-width: 300px; }
+        }
     </style>
 </head>
 <body>
@@ -620,7 +710,7 @@
                 <!-- Remove / Manage Products -->
                 <div class="admin-card2">
                     <h2>🗑️ Manage Products</h2>
-                    <p class="sub">Click the delete button to permanently remove a product from the store.</p>
+                    <p class="sub">Workers can add products. Only the admin (CEO) can edit or delete them to keep stock/price records accurate.</p>
                     <div id="worker-product-list">
                         <!-- Rendered by JS -->
                     </div>
@@ -680,6 +770,23 @@
                     </div>
                     <p id="worker-scan-status" style="font-size:13px;color:var(--c-text-secondary);margin:8px 0 0;"></p>
 
+                    <!-- Quick-add: a scanned barcode that isn't in the database yet -->
+                    <div id="worker-quick-add" class="worker-quick-add" style="display:none;">
+                        <p class="sub" style="margin:0 0 6px;">Scanned product isn't in the database yet. Enter its details to register it (so future scans identify it automatically), then it's added to the sale.</p>
+                        <div class="qa-grid">
+                            <input type="text" id="qa-barcode" placeholder="Barcode" readonly>
+                            <input type="text" id="qa-name" placeholder="Product name *">
+                            <input type="number" id="qa-price" placeholder="Price (₦) *" min="1">
+                            <input type="number" id="qa-stock" placeholder="Stock qty" min="0" value="10">
+                        </div>
+                        <input type="text" id="qa-category" list="qa-cat-list" placeholder="Category (optional)">
+                        <datalist id="qa-cat-list"></datalist>
+                        <div class="qa-actions">
+                            <button type="button" class="admin-btn green" onclick="workerQuickAddProduct()">Add product to sale</button>
+                            <button type="button" class="admin-btn secondary" onclick="hideWorkerQuickAdd()">Cancel</button>
+                        </div>
+                    </div>
+
                     <label>Current sale items</label>
                     <div id="worker-sale-session">
                         <p style="color:#999;font-size:14px;">No items yet — scan a product to begin.</p>
@@ -701,7 +808,10 @@
 
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
                         <strong>Total: <span id="worker-sale-total">₦0</span></strong>
-                        <button class="admin-btn green" style="width:auto;margin-top:0;padding:10px 18px;" onclick="completeWorkerSale()">Complete Sale</button>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button class="admin-btn secondary" style="width:auto;margin-top:0;padding:10px 18px;" onclick="printLastReceipt()">🖨 Receipt</button>
+                            <button class="admin-btn green" style="width:auto;margin-top:0;padding:10px 18px;" onclick="completeWorkerSale()">Complete Sale</button>
+                        </div>
                     </div>
                     <p id="worker-sale-receipt" class="pos-receipt" aria-live="polite"></p>
                 </div>
@@ -740,6 +850,20 @@
         <p>© 2026 LordTempsMart. All rights reserved.</p>
     </div>
 </footer>
+
+<!-- Receipt print preview modal -->
+<div id="receiptPreviewModal" class="receipt-modal" style="display:none;">
+    <div class="receipt-modal__panel">
+        <button type="button" class="receipt-modal__close" onclick="closeReceiptPreview()" title="Close">&times;</button>
+        <h3>🧾 Receipt Preview</h3>
+        <p class="sub">Preview copies below. Use <strong>Print</strong> to send to the receipt printer, then the next copy prints automatically.</p>
+        <div id="receiptPreviewContainer"></div>
+        <div class="receipt-actions">
+            <button type="button" class="admin-btn green" onclick="printReceiptPreview()">🖨 Print</button>
+            <button type="button" class="admin-btn secondary" onclick="closeReceiptPreview()">Close</button>
+        </div>
+    </div>
+</div>
 
 <script src="js/api.js"></script>
 <script src="js/data.js"></script>
@@ -806,11 +930,17 @@ function renderWorkerProductList() {
                 : '<span>' + (p.image || "🛍️") + "</span>";
             var item = document.createElement("div");
             item.className = "admin-product-item";
+            // Workers upload products but ONLY admins may edit/delete them (integrity).
+            var user = getCurrentUser() || {};
+            var isAdminView = user.role === 'admin';
+            var deleteBtn = isAdminView
+                ? '<button class="delete-btn" data-pid="' + p.id + '" onclick="confirmWorkerDeleteProduct(this.dataset.pid)">🗑 Delete</button>'
+                : '';
             item.innerHTML =
                 '<div class="thumb">' + imgHtml + "</div>" +
                 '<div class="info"><h4>' + p.name + '</h4><span class="cat">' + p.category + ' • Stock: ' + (p.stock || 0) + '</span></div>' +
                 '<div class="price">' + price(p.price) + "</div>" +
-                '<button class="delete-btn" data-pid="' + p.id + '" onclick="confirmWorkerDeleteProduct(this.dataset.pid)">🗑 Delete</button>';
+                deleteBtn;
             container.appendChild(item);
         });
     }).catch(function (err) {
@@ -1130,7 +1260,83 @@ async function scanWorkerProduct() {
     } catch (err) {
         var message = err.status === 404 ? "Product not found for barcode: " + identifier : (err.message || "Identifier not recognised");
         if (status) status.textContent = message;
-        showToast(message, "error");
+        // If the scanned identifier isn't in the database, offer to register it
+        // so future scans identify it and it can be sold immediately.
+        if (err.status === 404) {
+            revealWorkerQuickAdd(identifier);
+        } else {
+            showToast(message, "error");
+        }
+    }
+}
+
+/* ===== Quick-add: register a scanned-but-new product ===== */
+function hideWorkerQuickAdd() {
+    var panel = document.getElementById('worker-quick-add');
+    if (panel) panel.style.display = 'none';
+    var input = document.getElementById('worker-scan-input');
+    if (input) { input.value = ''; input.focus(); }
+}
+
+function revealWorkerQuickAdd(barcode) {
+    var panel = document.getElementById('worker-quick-add');
+    if (!panel) return;
+    document.getElementById('qa-barcode').value = barcode || '';
+    document.getElementById('qa-name').value = '';
+    document.getElementById('qa-price').value = '';
+    document.getElementById('qa-stock').value = '10';
+    document.getElementById('qa-category').value = '';
+    // Populate category suggestions once.
+    var catList = document.getElementById('qa-cat-list');
+    if (catList && catList.innerHTML === '') {
+        apiGetCategories().then(function (categories) {
+            catList.innerHTML = categories.map(function (c) {
+                return '<option value="' + String(c.name || '').replace(/"/g, '&quot;') + '"></option>';
+            }).join('');
+        }).catch(function () { catList.innerHTML = ''; });
+    }
+    panel.style.display = 'block';
+    var nameInput = document.getElementById('qa-name');
+    if (nameInput) nameInput.focus();
+}
+
+async function workerQuickAddProduct() {
+    var pname = document.getElementById('qa-name').value.trim();
+    var price = parseFloat(document.getElementById('qa-price').value);
+    var stock = parseInt(document.getElementById('qa-stock').value, 10) || 0;
+    var category = document.getElementById('qa-category').value.trim() || 'General';
+    var barcode = document.getElementById('qa-barcode').value.trim();
+    if (!pname) { showToast('Please enter a product name', 'error'); return; }
+    if (!Number.isFinite(price) || price <= 0) { showToast('Please enter a valid price', 'error'); return; }
+
+    var btn = document.querySelector('#worker-quick-add button.admin-btn.green');
+    var original = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = "Adding..."; }
+
+    try {
+        var product = await apiAddProduct({
+            name: pname,
+            category: category,
+            price: price,
+            rating: 4.5,
+            description: '',
+            image: '🛍️',
+            featured: false,
+            stock: stock,
+            barcode: barcode
+        });
+        showToast('Product registered with barcode. Added to sale.', 'success');
+        hideWorkerQuickAdd();
+        // Add the reloaded product (with stock_available) into the current sale.
+        var fresh = await apiGetProductByBarcode(barcode);
+        var prod = fresh.product;
+        if (prod) addWorkerSaleProduct(prod, 'unit');
+        renderWorkerSaleSession();
+        loadWorkerInventory();
+    } catch (err) {
+        showToast(err.message || 'Could not add the product', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = original; }
     }
 }
 
@@ -1164,12 +1370,88 @@ async function completeWorkerSale() {
         document.getElementById('worker-sale-change').textContent = '₦0';
         renderWorkerSaleSession();
         loadWorkerInventory();
+        // Offer an on-screen receipt preview (merchant + seller copies) to print.
+        openReceiptPreview({
+            saleRef: result.sale_ref,
+            items: result.result.items || result.result.lines || [],
+            total: Number(result.result.total) || total,
+            amountPaid: Number(result.amount_paid != null ? result.amount_paid : result.change_due),
+            change: Number(result.change_due) || 0,
+            paymentMethod: result.payment_method || paymentMethod,
+            collectedBy: workerLabel,
+            paidAt: new Date()
+        });
     } catch (err) {
         showToast(err.message || "Could not complete the sale", "error");
         loadWorkerInventory(); // refresh stock states after a rejection
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = "Complete Sale"; }
     }
+}
+
+/* ===== Receipt preview + printing ===== */
+var lastSaleReceipt = null;
+
+function escHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function receiptCopyHtml(copyLabel, sale) {
+    var now = sale.paidAt ? new Date(sale.paidAt) : new Date();
+    var methodLabel = String(sale.paymentMethod || '').toUpperCase().replace(/_/g, ' ');
+    var rows = (sale.items || []).map(function (line) {
+        var qty = Number(line.quantity) || 1;
+        var unit = Number(line.unitPrice != null ? line.unitPrice : (line.price || 0));
+        var lineTotal = Number(line.lineTotal != null ? line.lineTotal : (unit * qty));
+        return '<tr><td>' + escHtml(line.name || line.productName || 'Item') + '</td>' +
+            '<td class="qty">' + qty + '</td>' +
+            '<td class="amt">' + price(unit) + '</td>' +
+            '<td class="amt">' + price(lineTotal) + '</td></tr>';
+    }).join('') || '<tr><td colspan="4">—</td></tr>';
+
+    var change = Number(sale.change) || 0;
+    var paid = Number(sale.amountPaid != null ? sale.amountPaid : sale.total) || 0;
+
+    return '<div class="receipt-print">' +
+        '<div class="rp-head"><h4>LordTempsMart</h4><div>Physical Sale Receipt</div><div>Receipt # ' + escHtml(sale.saleRef || '') + '</div></div>' +
+        '<div class="rp-row"><span>Date:</span><span>' + now.toLocaleString() + '</span></div>' +
+        '<div class="rp-row"><span>Cashier:</span><span>' + escHtml(sale.collectedBy || '') + '</span></div>' +
+        '<table class="rp-items"><thead><tr><th>Item</th><th class="qty">Qty</th><th class="amt">Unit</th><th class="amt">Amount</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<div class="rp-row rp-total"><span>TOTAL</span><span>' + price(sale.total) + '</span></div>' +
+        (sale.paymentMethod === 'cash' ? '<div class="rp-row"><span>Cash</span><span>' + price(paid) + '</span></div><div class="rp-row"><span>Change</span><span>' + price(change) + '</span></div>' : '<div class="rp-row"><span>Paid by</span><span>' + escHtml(methodLabel) + '</span></div>') +
+        '<div class="rp-thanks">Thank you for shopping with us!</div>' +
+        '<div class="rp-copy">' + escHtml(copyLabel) + '</div>' +
+        '</div>';
+}
+
+function buildReceiptHtml(sale) {
+    return receiptCopyHtml('MERCHANT / STORE COPY', sale) +
+        '<div style="height:14px;"></div>' +
+        receiptCopyHtml('CUSTOMER COPY', sale);
+}
+
+function openReceiptPreview(sale) {
+    lastSaleReceipt = sale;
+    var container = document.getElementById('receiptPreviewContainer');
+    if (container) container.innerHTML = buildReceiptHtml(sale);
+    var modal = document.getElementById('receiptPreviewModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeReceiptPreview() {
+    var modal = document.getElementById('receiptPreviewModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function printReceiptPreview() {
+    window.print();
+}
+
+function printLastReceipt() {
+    if (!lastSaleReceipt) { showToast('No completed sale to print yet', 'error'); return; }
+    openReceiptPreview(lastSaleReceipt);
 }
 
 /* ===== Live worker notifications for online orders (requirements #3/#4) ===== */
@@ -1207,6 +1489,7 @@ function showWorkerOrderNotification(payload) {
 
     setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
     if (typeof loadWorkerOrders === "function") loadWorkerOrders();
+    if (typeof loadWorkerStats === "function") loadWorkerStats();
 }
 
 function showWorkerPaymentNotification(payload, title, color) {
@@ -1231,6 +1514,7 @@ function showWorkerPaymentNotification(payload, title, color) {
     setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
     loadWorkerOrders();
     loadWorkerPendingPayments();
+    if (typeof loadWorkerStats === "function") loadWorkerStats();
 }
 
 (function startWorkerOrderStream() {
@@ -1260,6 +1544,7 @@ function showWorkerPaymentNotification(payload, title, color) {
                 showToast("Payment received for #" + p.orderRef, "success");
                 setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
                 if (typeof loadWorkerOrders === "function") loadWorkerOrders();
+                if (typeof loadWorkerStats === "function") loadWorkerStats();
             } catch (err) {}
         });
         stream.addEventListener('payment_verification_submitted', function (e) {
@@ -1447,11 +1732,14 @@ window.addEventListener("DOMContentLoaded", function () {
         };
         document.getElementById("workerInfo").textContent = "Logged in as " + currentUser.name;
         var workerType = String(currentUser.worker_type || 'UNIVERSAL').toUpperCase();
-        document.querySelector('[data-tab="products"]').style.display = 'none';
+        // Workers CAN upload products, so the Products tab stays available. Only
+        // the role-specific tabs (orders/inventory) are hidden per worker type.
         if (workerType === 'ONLINE') document.querySelector('[data-tab="inventory"]').style.display = 'none';
         if (workerType === 'PHYSICAL') document.querySelector('[data-tab="orders"]').style.display = 'none';
         switchWorkerTab(workerType === 'PHYSICAL' ? 'inventory' : 'orders');
         loadWorkerStats();
+        // Keep the big stat cards live without a manual refresh.
+        setInterval(loadWorkerStats, 15000);
 
         // Scanners "type" the code and press Enter — treat Enter as Add.
         var scanInput = document.getElementById("worker-scan-input");

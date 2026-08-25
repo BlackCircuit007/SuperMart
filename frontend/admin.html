@@ -525,6 +525,14 @@
             .admin-product-item .info { flex-basis: 100%; }
             .admin-product-item { flex-direction: column; text-align: center; }
         }
+
+        /* ===== Responsive tables (mobile) ===== */
+        /* Tables keep their natural width and scroll horizontally inside their
+           overflow wrapper instead of squishing the screen. */
+        @media (max-width: 720px) {
+            .report-table { min-width: 720px; }
+            .report-table th, .report-table td { white-space: nowrap; }
+        }
     </style>
 </head>
 <body>
@@ -629,6 +637,7 @@
             <button class="admin-tab" data-tab="workers" onclick="switchAdminTab('workers')">👷 Workers</button>
             <button class="admin-tab" data-tab="orders" onclick="switchAdminTab('orders')">📋 Orders</button>
             <button class="admin-tab" data-tab="inventory" onclick="switchAdminTab('inventory')">📦 Inventory</button>
+            <button class="admin-tab" data-tab="physical-sales" onclick="switchAdminTab('physical-sales')">🧾 Physical Sales</button>
         </div>
 
         <!-- Products Tab -->
@@ -825,6 +834,29 @@
                 </div>
             </div>
         </div>
+
+        <!-- Physical Sales Tab (dedicated report of every counter sale) -->
+        <div id="tab-physical-sales" class="admin-tab-content" style="display:none;">
+            <div class="admin-card">
+                <h2>🧾 Physical Sales</h2>
+                <p class="sub">Every counter sale recorded at the point of sale, listed by the worker who collected it. Use this to verify physical revenue independently of stock movements.</p>
+                <div style="overflow-x:auto;">
+                    <table class="report-table" id="adminPhysicalSalesTable">
+                        <thead>
+                            <tr>
+                                <th>Receipt</th>
+                                <th>Date</th>
+                                <th>Worker</th>
+                                <th>Payment</th>
+                                <th>Item Count</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminPhysicalSalesBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </main>
 </div>
     </main>
@@ -997,10 +1029,44 @@ function switchAdminTab(tabName) {
     });
     document.getElementById("tab-" + tabName).style.display = "block";
 
-    if (tabName === "reports") { loadReports(); loadSummaryReport(); }
+    if (tabName === "reports") {
+        loadReports();
+        loadSummaryReport();
+    }
     if (tabName === "workers") loadWorkers();
     if (tabName === "orders") loadOrders();
     if (tabName === "inventory") loadAdminInventory();
+    if (tabName === "physical-sales") loadPhysicalSales();
+}
+
+/* ===== Physical sales tab (dedicated report) ===== */
+function loadPhysicalSales() {
+    var tbody = document.getElementById("adminPhysicalSalesBody");
+    if (!tbody) return;
+    apiGetPhysicalSales().then(function (sales) {
+        tbody.innerHTML = "";
+        if (!sales || sales.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">No physical sales recorded yet.</td></tr>';
+            return;
+        }
+        sales.forEach(function (s) {
+            var items = [];
+            try { items = JSON.parse(s.items || '[]'); } catch (e) {}
+            var itemCount = items.reduce(function (n, i) { return n + (Number(i.quantity) || 1); }, 0);
+            var methodLabel = String(s.payment_method || '').toUpperCase().replace(/_/g, ' ');
+            var tr = document.createElement("tr");
+            tr.innerHTML =
+                '<td><strong>' + (s.sale_ref || '—') + '</strong></td>' +
+                '<td>' + new Date(s.created_at).toLocaleString() + '</td>' +
+                '<td>' + (s.actor_name || 'Unknown') + (s.actor_worker_type ? ' <small style="color:#999;">(' + s.actor_worker_type + ')</small>' : '') + '</td>' +
+                '<td>' + methodLabel + '</td>' +
+                '<td>' + itemCount + '</td>' +
+                '<td><strong>₦' + Number(s.total).toLocaleString() + '</strong></td>';
+            tbody.appendChild(tr);
+        });
+    }).catch(function (err) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#e53935;">Failed to load physical sales: ' + err.message + '</td></tr>';
+    });
 }
 
 /* ===== Inventory tab (staff) ===== */
@@ -1239,6 +1305,7 @@ function startAdminAlerts() {
             showAdminNotification('Physical sale completed', 'Total: ₦' + Number(sale.total || 0).toLocaleString() + ' • ' + (sale.itemCount || 0) + ' item lines', '#16a34a');
             loadAdminInventory();
             loadAdminStats();
+            if (document.getElementById('tab-physical-sales').style.display !== 'none') loadPhysicalSales();
             if (document.getElementById('tab-reports').style.display !== 'none') { loadReports(); loadSummaryReport(); }
         } catch (err) {}
     });
@@ -1278,6 +1345,12 @@ window.addEventListener("DOMContentLoaded", function () {
         renderAdminProductList();
         loadAdminStats();
         startAdminAlerts();
+        // Keep the big stat cards live without a manual refresh.
+        setInterval(function () {
+            loadAdminStats();
+            if (document.getElementById('tab-physical-sales').style.display !== 'none') loadPhysicalSales();
+            if (document.getElementById('tab-inventory').style.display !== 'none') loadAdminInventory();
+        }, 15000);
     } else {
         loginScreen.style.display = "block";
         panel.style.display = "none";

@@ -174,6 +174,9 @@
             var CLOSE_PAYMENT_MODAL_IDS = ["closePaymentModal", "closePaymentModalBtn"];
             var PAYMENT_STATUS_ID = "paymentStatus";
             var transferConfigured = false;
+            // Set once the order is placed for transfer (like cash-on-delivery);
+            // the verification modal then submits against this order reference.
+            var currentTransferOrderRef = null;
 
             // ---- Open / close payment modal ----
             function openPaymentModal() {
@@ -240,14 +243,33 @@
                 var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
                 var paymentMethod = document.querySelector("input[name='payment']:checked").value;
 
+                // Transfer works like cash on delivery: place the order now, then
+                // complete it with a transfer-verification reference in the modal.
+                // It is never disabled for lack of pre-configured bank details.
                 if (paymentMethod === "transfer") {
-                    if (!transferConfigured) {
-                        showToast("Bank transfer is currently unavailable. Please choose another payment method.", "error");
+                    var tBtn = document.querySelector(".checkout-btn[onclick='finalizeCheckout()']");
+                    if (tBtn) { tBtn.disabled = true; tBtn.textContent = "Placing order..."; }
+                    try {
+                        var transferOrder = await apiPlaceOrder({
+                            customer_name: name,
+                            customer_email: email,
+                            customer_phone: phone,
+                            shipping_address: address,
+                            customer_notes: "Bank transfer order (pending verification)",
+                            payment_method: "transfer",
+                            items: cart,
+                            total: total
+                        });
+                        await apiSaveCart([]);
+                        updateCartCount();
+                        currentTransferOrderRef = transferOrder.orderRef;
+                        if (tBtn) { tBtn.disabled = false; tBtn.textContent = "Place Order"; }
+                        setVerificationStatus("Order " + transferOrder.orderRef + " is saved as PENDING. Transfer and submit your reference below to complete it.");
                         openPaymentModal();
-                        return;
+                    } catch (err) {
+                        if (tBtn) { tBtn.disabled = false; tBtn.textContent = "Place Order"; }
+                        showToast(err.message || "Could not place your transfer order", "error");
                     }
-                    showToast("Use Verify Payment to submit your transfer", "error");
-                    openPaymentModal();
                     return;
                 }
 
@@ -421,27 +443,36 @@
                 setVerificationStatus("Sending your verification request. Please wait...");
 
                 try {
-                    var cart = await getCartItems();
-                    var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
-                    if (cart.length === 0) throw new Error("Your cart is empty");
-                    if (!transferConfigured) throw new Error("Bank transfer is currently unavailable. Please choose another payment method.");
-                    if (Math.abs(Number(amount) - total) > 0.01) {
-                        throw new Error("The amount paid must match the order total.");
+                    // Transfer is treated like cash-on-delivery: the order is usually
+                    // placed by finalizeCheckout already (and the cart cleared). If
+                    // there is no order yet the user reached the modal first — place
+                    // the order here so the reference has a target.
+                    var orderRef = currentTransferOrderRef;
+                    if (!orderRef) {
+                        var cart = await getCartItems();
+                        if (cart.length === 0) throw new Error("Your cart is empty");
+                        var total = cart.reduce(function (s, i) { return s + i.price * i.quantity; }, 0);
+                        if (Math.abs(Number(amount) - total) > 0.01) {
+                            throw new Error("The amount paid must match the order total.");
+                        }
+                        var fallbackOrder = await apiPlaceOrder({
+                            customer_name: name,
+                            customer_email: email,
+                            customer_phone: shippingPhone,
+                            shipping_address: address,
+                            customer_notes: paymentNotes,
+                            payment_method: "transfer",
+                            items: cart,
+                            total: total
+                        });
+                        orderRef = fallbackOrder.orderRef;
+                        currentTransferOrderRef = orderRef;
+                        await apiSaveCart([]);
+                        updateCartCount();
                     }
 
-                    var order = await apiPlaceOrder({
-                        customer_name: name,
-                        customer_email: email,
-                        customer_phone: shippingPhone,
-                        shipping_address: address,
-                        customer_notes: paymentNotes,
-                        payment_method: "transfer",
-                        items: cart,
-                        total: total
-                    });
-
                     var result = await apiSubmitPaymentVerification({
-                        order_ref: order.orderRef,
+                        order_ref: orderRef,
                         payer_name: user ? user.name : name,
                         payer_email: email,
                         payer_phone: phone,
@@ -450,11 +481,9 @@
                         payment_notes: paymentNotes
                     });
 
-                    await apiSaveCart([]);
-                    updateCartCount();
                     setVerificationStatus("Payment verification submitted. Awaiting manual confirmation.");
-                    alert("Payment verification submitted for order " + order.orderRef + ".");
-                    window.location.href = "finally.html?ref=" + encodeURIComponent(order.orderRef) + "&payment=transfer";
+                    alert("Payment verification submitted for order " + orderRef + ".");
+                    window.location.href = "finally.html?ref=" + encodeURIComponent(orderRef) + "&payment=transfer";
                 } catch (err) {
                     setVerificationButtonLoading(btn, false);
                     setVerificationStatus("");
@@ -476,17 +505,20 @@
                     transferConfigured = !!config.configured;
                     var instructions = document.getElementById("transferInstructions");
                     var details = document.getElementById("transferAccountDetails");
-                    if (!transferConfigured) {
-                        if (instructions) instructions.textContent = "Bank transfer is currently unavailable. Please choose another payment method.";
+                    if (transferConfigured) {
+                        if (instructions) instructions.textContent = "Transfer the exact order amount to the configured account below.";
+                        if (details) details.innerHTML = "<p><strong>Bank:</strong> " + config.bank_name + "<br><strong>Account name:</strong> " + config.account_name + "<br><strong>Account number:</strong> " + config.account_number + "</p>";
+                    } else {
+                        // Transfer is never disabled — if no account is pre-configured
+                        // the store still expects the customer to transfer and submit
+                        // a reference for worker verification.
+                        if (instructions) instructions.textContent = "Transfer the exact order amount to the store's bank account, then submit your reference below. Contact the store for account details if they are not listed.";
                         if (details) details.textContent = "";
-                        return;
                     }
-                    if (instructions) instructions.textContent = "Transfer the exact order amount to the configured account below.";
-                    if (details) details.innerHTML = "<p><strong>Bank:</strong> " + config.bank_name + "<br><strong>Account name:</strong> " + config.account_name + "<br><strong>Account number:</strong> " + config.account_number + "</p>";
                 }).catch(function () {
                     transferConfigured = false;
                     var instructions = document.getElementById("transferInstructions");
-                    if (instructions) instructions.textContent = "Bank transfer details could not be loaded. Please choose another payment method.";
+                    if (instructions) instructions.textContent = "Transfer the exact order amount to the store's bank account, then submit your reference below.";
                 });
 
                 // Pre-fill from user profile

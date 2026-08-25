@@ -92,22 +92,29 @@ function renderCart() {
 async function renderFeaturedProducts() {
     var container = document.getElementById("featured-products");
     if (!container) return;
-    var products = await loadProductsFromAPI();
-    var featured = products.filter(function (p) { return p.featured; });
-    if (featured.length === 0) featured = products.slice(0, 8);
-    container.innerHTML = featured.map(productCardHtml).join("");
-    bindSearch(container);
+    function render(products) {
+        var featured = products.filter(function (p) { return p.featured; });
+        if (featured.length === 0) featured = products.slice(0, 8);
+        container.innerHTML = featured.map(productCardHtml).join("");
+        bindSearch(container);
+    }
+    var cached = getProducts();
+    if (cached.length) render(cached);
+    render(await loadProductsFromAPI());
 }
 
 async function renderAllProducts() {
     var container = document.getElementById("all-products");
     if (!container) return;
-    var products = await loadProductsFromAPI();
-    container.innerHTML = products.map(productCardHtml).join("");
-    // Update count label
-    var countEl = document.getElementById("product-count");
-    if (countEl) countEl.textContent = products.length + " items available";
-    bindSearch(container);
+    function render(products) {
+        container.innerHTML = products.map(productCardHtml).join("");
+        var countEl = document.getElementById("product-count");
+        if (countEl) countEl.textContent = products.length + " items available";
+        bindSearch(container);
+    }
+    var cached = getProducts();
+    if (cached.length) render(cached);
+    render(await loadProductsFromAPI());
 }
 
 function bindSearch(container) {

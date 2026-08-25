@@ -1154,7 +1154,11 @@ async function completeWorkerSale() {
             body: JSON.stringify({ items: items, payment_method: paymentMethod, amount_paid: amountPaid })
         });
         showToast("Sale completed", "success");
-        document.getElementById('worker-sale-receipt').textContent = 'Receipt ' + result.sale_ref + ' • Total ' + price(result.result.total) + (paymentMethod === 'cash' ? ' • Change ' + price(result.change_due) : ' • Paid by ' + paymentMethod.replace('_', ' '));
+        var workerUser = getCurrentUser ? getCurrentUser() : null;
+        var workerLabel = (workerUser && workerUser.name) || 'Worker';
+        document.getElementById('worker-sale-receipt').textContent = 'Receipt ' + result.sale_ref + ' • Total ' + price(result.result.total)
+            + (paymentMethod === 'cash' ? ' • Change ' + price(result.change_due) : ' • Paid by ' + String(paymentMethod).replace('_', ' '))
+            + ' • Collected by ' + workerLabel + ' • Payment recorded';
         workerSaleSession = [];
         document.getElementById('worker-amount-paid').value = '';
         document.getElementById('worker-sale-change').textContent = '₦0';
@@ -1447,7 +1451,6 @@ window.addEventListener("DOMContentLoaded", function () {
         if (workerType === 'ONLINE') document.querySelector('[data-tab="inventory"]').style.display = 'none';
         if (workerType === 'PHYSICAL') document.querySelector('[data-tab="orders"]').style.display = 'none';
         switchWorkerTab(workerType === 'PHYSICAL' ? 'inventory' : 'orders');
-        renderWorkerProductList();
         loadWorkerStats();
 
         // Scanners "type" the code and press Enter — treat Enter as Add.

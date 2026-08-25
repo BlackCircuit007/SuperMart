@@ -137,6 +137,7 @@ async function createTables() {
         await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS processed_by TEXT`);
         await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS processed_by_name TEXT`);
         await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS processed_at TEXT`);
+        await client.query(`ALTER TABLE payment_verifications ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'online'`);
 
         // Carts table
         await client.query(`
@@ -261,6 +262,10 @@ async function createTables() {
                 created_at TEXT NOT NULL
             )
         `);
+        // Attribution for strict accountability: every physical counter payment
+        // carries the name/type of the physical worker who collected it.
+        await client.query(`ALTER TABLE physical_sales ADD COLUMN IF NOT EXISTS actor_name TEXT`);
+        await client.query(`ALTER TABLE physical_sales ADD COLUMN IF NOT EXISTS actor_worker_type TEXT`);
 
         // Integration logging (requirement #21). Never stores secrets.
         await client.query(`

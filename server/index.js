@@ -909,10 +909,20 @@ app.post('/api/admin/inventory/physical-sale-session', authRequired, workerCapab
         const amountPaid = Number(amount_paid);
         const paid = paymentMethod === 'cash' ? amountPaid : result.total;
         const saleRef = external_sale_id || generateOrderRef();
-        await db.insert('physical_sales', {
+
+        // Strict attribution (requirement: physical workers own their counter
+        // payments). workerCapability sets req.worker for worker accounts; admins
+        // fall back to req.user so the collected-by identity is always recorded.
+        const actor = req.worker || req.user || {};
+        const actorName = actor.name || 'Unknown worker';
+        const actorType = String(actor.worker_type || 'PHYSICAL').toUpperCase();
+
+        const physSale = await db.insert('physical_sales', {
             sale_ref: saleRef,
             supermarket_id: String(supermarketId),
             actor_user_id: req.user.id,
+            actor_name: actorName,
+            actor_worker_type: actorType,
             payment_method: paymentMethod,
             amount_paid: paid,
             change_due: Math.max(0, paid - result.total),
@@ -920,6 +930,33 @@ app.post('/api/admin/inventory/physical-sale-session', authRequired, workerCapab
             items: JSON.stringify(result.items),
             created_at: new Date().toISOString()
         });
+
+        // Record the payment in the same ledger used for online transfers/cash.
+        // Status is already 'verified' because money was collected at the counter;
+        // stamping the physical worker keeps the ledger a full, auditable record of
+        // every physical payment (source='physical' separates it from online rows).
+        await db.insert('payment_verifications', {
+            order_ref: saleRef,
+            payer_name: actorName,
+            payer_phone: 'POS',
+            payer_email: null,
+            amount: paid,
+            transaction_ref: 'POS-' + saleRef,
+            status: 'verified',
+            source: 'physical',
+            payment_notes: 'Physical POS sale ' + saleRef + ' collected by ' + actorName,
+            proof_url: null,
+            processed_by: String(actor.id || ''),
+            processed_by_name: actorName,
+            processed_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+        });
+
+        // Audit trail attributes the physical payment to the exact worker, so the
+        // admin "Worker activity" report shows who collected each counter sale.
+        await writeAudit(req, 'PHYSICAL_SALE_RECORDED', 'physical_sale', physSale ? physSale.id : saleRef,
+            'pending', 'recorded',
+            { sale_ref: saleRef, payment_method: paymentMethod, amount_paid: paid, collected_by: actorName });
 
         if (external_sale_id) {
             await db.insert('pos_transactions', {

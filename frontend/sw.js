@@ -1,6 +1,6 @@
 /* LordTempsMart service worker — enables one-click "Install app" and an
  * offline shell. API calls are NEVER cached (always live data). */
-const CACHE_NAME = 'lordtempsmart-v2';
+const CACHE_NAME = 'lordtempsmart-v3';
 
 const CORE_ASSETS = [
     '/',
@@ -50,12 +50,19 @@ self.addEventListener('fetch', (event) => {
     if (url.origin !== location.origin) return;
     if (url.pathname.startsWith('/api/')) return; // live data only — never cache
 
-    // Page navigations: network first, cached shell as offline fallback
+    // Page navigations: show the cached shell immediately, then refresh it.
     if (req.mode === 'navigate') {
         event.respondWith(
-            fetch(req).catch(() =>
-                caches.match(url.pathname).then((r) => r || caches.match('/index.html'))
-            )
+            caches.match(url.pathname).then((cached) => {
+                const network = fetch(req).then((res) => {
+                    if (res && res.ok && res.type === 'basic') {
+                        const copy = res.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+                    }
+                    return res;
+                }).catch(() => cached || caches.match('/index.html'));
+                return cached || network;
+            })
         );
         return;
     }

@@ -286,6 +286,8 @@
                 }
             }
 
+            window.finalizeCheckout = finalizeCheckout;
+
             // ---- Flutterwave inline checkout (official v3.js) ----
             // Amount/keys come from OUR backend; the browser never dictates them.
             async function startFlutterwaveCheckout(orderRef, name, email, phone, submitBtn) {

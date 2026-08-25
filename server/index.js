@@ -505,10 +505,21 @@ app.get('/api/me', authRequired, async (req, res) => {
 // Get all products
 app.get('/api/products', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM products WHERE active = 1 ORDER BY id DESC');
+        const result = await pool.query(
+            `SELECT p.*, i.quantity AS stock_available, i.low_stock_threshold AS inventory_low_stock_threshold
+             FROM products p
+             LEFT JOIN inventory i ON i.product_id = p.id
+                AND i.supermarket_id = (SELECT id FROM supermarkets WHERE slug = 'default')
+             WHERE p.active = 1 ORDER BY p.id DESC`
+        );
         const products = result.rows;
         products.sort((a, b) => Number(b.id) - Number(a.id));
-        await enrichProductsWithInventory(products);
+        products.forEach(product => {
+            const quantity = Number(product.stock_available != null ? product.stock_available : product.stock) || 0;
+            product.stock = quantity;
+            product.in_stock = quantity > 0;
+            product.low_stock = quantity > 0 && quantity <= (Number(product.inventory_low_stock_threshold) || 5);
+        });
         res.json({ products });
     } catch (err) {
         console.error('Get products error:', err);
@@ -523,9 +534,16 @@ app.get('/api/admin/products', authRequired, adminRequired, async (req, res) => 
         const result = await pool.query(
             `SELECT p.*, u.name AS created_by_name, u.email AS created_by_username
              FROM products p LEFT JOIN users u ON u.id = p.created_by
+             LEFT JOIN inventory i ON i.product_id = p.id
+                AND i.supermarket_id = (SELECT id FROM supermarkets WHERE slug = 'default')
              ORDER BY p.id DESC`
         );
-        await enrichProductsWithInventory(result.rows);
+        result.rows.forEach(product => {
+            const quantity = Number(product.stock_available != null ? product.stock_available : product.stock) || 0;
+            product.stock = quantity;
+            product.in_stock = quantity > 0;
+            product.low_stock = quantity > 0 && quantity <= (Number(product.inventory_low_stock_threshold) || 5);
+        });
         res.json({ products: result.rows });
     } catch (err) {
         console.error('Get admin products error:', err);
@@ -540,12 +558,21 @@ app.get('/api/products/search', authRequired, workerCapability('PHYSICAL'), asyn
         const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
         if (!query) return res.json({ products: [] });
         const result = await pool.query(
-            `SELECT * FROM products WHERE active = 1
+            `SELECT p.*, i.quantity AS stock_available, i.low_stock_threshold AS inventory_low_stock_threshold
+             FROM products p
+             LEFT JOIN inventory i ON i.product_id = p.id
+                AND i.supermarket_id = (SELECT id FROM supermarkets WHERE slug = 'default')
+             WHERE p.active = 1
              AND (name ILIKE $1 OR COALESCE(barcode, '') ILIKE $1)
-             ORDER BY CASE WHEN barcode = $2 THEN 0 ELSE 1 END, name LIMIT $3`,
+             ORDER BY CASE WHEN p.barcode = $2 THEN 0 ELSE 1 END, p.name LIMIT $3`,
             ['%' + query + '%', query, limit]
         );
-        await enrichProductsWithInventory(result.rows);
+        result.rows.forEach(product => {
+            const quantity = Number(product.stock_available != null ? product.stock_available : product.stock) || 0;
+            product.stock = quantity;
+            product.in_stock = quantity > 0;
+            product.low_stock = quantity > 0 && quantity <= (Number(product.inventory_low_stock_threshold) || 5);
+        });
         res.json({ products: result.rows });
     } catch (err) {
         console.error('Product search error:', err);
@@ -813,6 +840,7 @@ app.get('/api/stream', async (req, res) => {
             if (decoded && (decoded.role === 'worker' || decoded.role === 'admin')) {
                 client.staff = true;
                 client.userId = decoded.id;
+                client.supermarketId = await inventory.getDefaultSupermarketId();
                 const worker = await db.getById('users', decoded.id);
                 client.workerType = worker && worker.role === 'worker' ? String(worker.worker_type || 'UNIVERSAL').toUpperCase() : 'UNIVERSAL';
             }
@@ -1000,10 +1028,21 @@ app.get('/api/admin/reports/summary', authRequired, adminRequired, async (req, r
         const byMethod = {};
         const byStatus = {};
         const byDay = {};
+        physicalSales.forEach(sale => {
+            const method = sale.payment_method || 'unknown';
+            byMethod[method] = byMethod[method] || { orders: 0, total: 0, paid: 0, pending: 0, failed: 0, physicalSales: 0 };
+            byMethod[method].physicalSales += 1;
+            byMethod[method].total += Number(sale.total) || 0;
+            byMethod[method].paid += Number(sale.amount_paid || sale.total) || 0;
+            const day = String(sale.created_at).slice(0, 10);
+            byDay[day] = byDay[day] || { orders: 0, physicalSales: 0, revenue: 0 };
+            byDay[day].physicalSales += 1;
+            byDay[day].revenue += Number(sale.total) || 0;
+        });
         orders.forEach(order => {
             const method = order.payment_method || 'unknown';
             const status = order.payment_status || 'pending';
-            byMethod[method] = byMethod[method] || { orders: 0, total: 0, paid: 0, pending: 0, failed: 0 };
+            byMethod[method] = byMethod[method] || { orders: 0, total: 0, paid: 0, pending: 0, failed: 0, physicalSales: 0 };
             byMethod[method].orders += 1;
             byMethod[method].total += Number(order.total) || 0;
             if (status === 'verified') byMethod[method].paid += Number(order.total) || 0;
@@ -1011,7 +1050,7 @@ app.get('/api/admin/reports/summary', authRequired, adminRequired, async (req, r
             if (status === 'failed') byMethod[method].failed += 1;
             byStatus[status] = (byStatus[status] || 0) + 1;
             const day = String(order.created_at).slice(0, 10);
-            byDay[day] = byDay[day] || { orders: 0, revenue: 0 };
+            byDay[day] = byDay[day] || { orders: 0, physicalSales: 0, revenue: 0 };
             byDay[day].orders += 1;
             byDay[day].revenue += Number(order.total) || 0;
         });
@@ -1028,7 +1067,7 @@ app.get('/api/admin/reports/summary', authRequired, adminRequired, async (req, r
                 physicalSales: physicalSales.length,
                 onlineRevenue: orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0),
                 physicalRevenue: physicalSales.reduce((sum, s) => sum + (Number(s.total) || 0), 0),
-                paid: orders.filter(o => o.payment_status === 'verified').reduce((sum, o) => sum + (Number(o.total) || 0), 0) + physicalSales.reduce((sum, s) => sum + (Number(s.total) || 0), 0),
+                paid: orders.filter(o => o.payment_status === 'verified').reduce((sum, o) => sum + (Number(o.total) || 0), 0) + physicalSales.reduce((sum, s) => sum + (Number(s.amount_paid || s.total) || 0), 0),
                 pendingPayments: orders.filter(o => o.payment_status === 'pending').length,
                 failedPayments: orders.filter(o => o.payment_status === 'failed').length,
                 cancelledOrders: orders.filter(o => o.status === 'cancelled').length,
@@ -1172,7 +1211,7 @@ app.post('/api/pos/sales', async (req, res) => {
 
         await logIntegration('pos_sale_processed', supermarketId, external_sale_id,
             'items=' + result.items.length + ' total=' + result.total);
-        await writeAudit(req, 'PHYSICAL_SALE_COMPLETED', 'sale', saleRef, null, 'completed', { total: result.total, item_count: result.items.length });
+        await writeAudit(req, 'PHYSICAL_SALE_COMPLETED', 'sale', external_sale_id, null, 'completed', { total: result.total, item_count: result.items.length });
 
         res.status(201).json({
             message: 'POS sale processed',
@@ -2123,14 +2162,15 @@ app.get('/api/worker/stats', authRequired, workerOrAdminRequired, async (req, re
     try {
         const products = await db.getAll('products');
         const orders = await db.getAll('orders');
+        const physicalSales = await db.getAll('physical_sales');
         const payments = await db.getAll('payment_verifications');
 
         const totalProducts = products.length;
         const totalOrders = orders.length;
         const pendingPayments = payments.filter(p => p.status === 'pending').length;
-        const totalRevenue = orders.filter(o => o.payment_status === 'verified').reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+        const totalRevenue = orders.filter(o => o.payment_status === 'verified').reduce((sum, o) => sum + (Number(o.total) || 0), 0) + physicalSales.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
 
-        res.json({ stats: { totalProducts, totalOrders, totalRevenue, pendingPayments } });
+        res.json({ stats: { totalProducts, totalOrders, physicalSales: physicalSales.length, totalRevenue, pendingPayments } });
     } catch (err) {
         console.error('Worker stats error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -2141,12 +2181,13 @@ app.get('/api/admin/stats', authRequired, adminRequired, async (req, res) => {
     try {
         const products = await db.getAll('products');
         const orders = await db.getAll('orders');
+        const physicalSales = await db.getAll('physical_sales');
         const users = await db.getAll('users');
         const payments = await db.getAll('payment_verifications');
 
         const totalProducts = products.length;
         const totalOrders = orders.length;
-        const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+        const totalRevenue = orders.filter(o => o.payment_status === 'verified').reduce((sum, o) => sum + (Number(o.total) || 0), 0) + physicalSales.reduce((sum, s) => sum + (Number(s.total) || 0), 0);
         const totalUsers = users.filter(u => u.role === 'buyer').length;
         const totalWorkers = users.filter(u => u.role === 'worker').length;
         const pendingPayments = payments.filter(p => p.status === 'pending').length;
@@ -2162,6 +2203,17 @@ app.get('/api/admin/stats', authRequired, adminRequired, async (req, res) => {
                         if (String(item.id) === String(p.id)) {
                             totalOrdered += item.quantity || 0;
                             totalRevenueForProduct += (item.price || 0) * (item.quantity || 0);
+                        }
+                    });
+                } catch (e) {}
+            });
+            physicalSales.forEach(sale => {
+                try {
+                    const items = JSON.parse(sale.items || '[]');
+                    items.forEach(item => {
+                        if (String(item.productId || item.product_id || item.id) === String(p.id)) {
+                            totalOrdered += Number(item.quantity) || 0;
+                            totalRevenueForProduct += Number(item.lineTotal) || (Number(item.unitPrice || p.price) * (Number(item.quantity) || 0));
                         }
                     });
                 } catch (e) {}
@@ -2183,6 +2235,7 @@ app.get('/api/admin/stats', authRequired, adminRequired, async (req, res) => {
             stats: {
                 totalProducts,
                 totalOrders,
+                physicalSales: physicalSales.length,
                 totalRevenue,
                 totalUsers,
                 totalWorkers,
@@ -2253,6 +2306,7 @@ app.get('/api/admin/export/products', authRequired, adminRequired, async (req, r
     try {
         const products = await db.getAll('products');
         const orders = await db.getAll('orders');
+        const physicalSales = await db.getAll('physical_sales');
 
         const csvRows = [
             ['Product ID', 'Name', 'Category', 'Price', 'Stock', 'Featured', 'Total Ordered']
@@ -2267,6 +2321,14 @@ app.get('/api/admin/export/products', authRequired, adminRequired, async (req, r
                         if (String(item.id) === String(p.id)) {
                             totalOrdered += item.quantity || 0;
                         }
+                    });
+                } catch (e) {}
+            });
+            physicalSales.forEach(sale => {
+                try {
+                    const items = JSON.parse(sale.items || '[]');
+                    items.forEach(item => {
+                        if (String(item.productId || item.product_id || item.id) === String(p.id)) totalOrdered += Number(item.quantity) || 0;
                     });
                 } catch (e) {}
             });

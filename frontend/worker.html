@@ -1267,7 +1267,11 @@ function showWorkerPaymentNotification(payload, title, color) {
         stream.addEventListener('cod_payment_collected', function (e) {
             try { showWorkerPaymentNotification(JSON.parse(e.data), 'COD PAYMENT COLLECTED', '#16a34a'); } catch (err) {}
         });
-        stream.addEventListener('physical_sale_recorded', function () {
+        stream.addEventListener('physical_sale_recorded', function (e) {
+            try {
+                var sale = JSON.parse(e.data);
+                showToast('Physical sale completed: ₦' + Number(sale.total || 0).toLocaleString(), 'success');
+            } catch (err) {}
             var tab = document.getElementById("tab-inventory");
             if (tab && tab.style.display !== "none") loadWorkerInventory();
         });

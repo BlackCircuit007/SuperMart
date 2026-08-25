@@ -547,6 +547,12 @@ async function dailyReport(supermarketId, date) {
          WHERE created_at >= $1 AND created_at <= $2 AND status <> 'cancelled'`,
         [dayStart, dayEnd]
     );
+    const physicalSales = await pool.query(
+        `SELECT COUNT(*) AS total_sales, COALESCE(SUM(total), 0) AS revenue
+         FROM physical_sales
+         WHERE created_at >= $1 AND created_at <= $2`,
+        [dayStart, dayEnd]
+    );
 
     const lowAndOut = await listInventory(sid);
     const timeline = await pool.query(
@@ -574,7 +580,10 @@ async function dailyReport(supermarketId, date) {
             returned: (byType[MOVEMENT_TYPES.RETURNED] || {}).unitsIn || 0,
             cancelledRestores: (byType[MOVEMENT_TYPES.CANCELLED] || {}).unitsIn || 0,
             totalOrders: Number(orders.rows[0].total_orders) || 0,
-            onlineRevenue: Number(orders.rows[0].revenue) || 0
+            onlineRevenue: Number(orders.rows[0].revenue) || 0,
+            physicalSales: Number(physicalSales.rows[0].total_sales) || 0,
+            physicalRevenue: Number(physicalSales.rows[0].revenue) || 0,
+            totalRevenue: (Number(orders.rows[0].revenue) || 0) + (Number(physicalSales.rows[0].revenue) || 0)
         },
         lowStockProducts: lowAndOut.filter(i => i.low_stock),
         outOfStockProducts: lowAndOut.filter(i => i.out_of_stock),

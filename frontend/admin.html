@@ -585,6 +585,7 @@
 <!-- Admin Panel (shown when logged in) -->
 <div id="adminPanel" style="display:none;">
     <main class="page-shell" style="padding-top:20px;">
+        <div id="adminNotifications" aria-live="polite"></div>
         <section class="section-head page-head">
             <div>
                 <p class="eyebrow">Admin Panel</p>
@@ -695,19 +696,24 @@
         <!-- Reports Tab -->
         <div id="tab-reports" class="admin-tab-content" style="display:none;">
             <div class="admin-card" style="margin-bottom:24px;">
-                <h2>📊 Product Order Report</h2>
-                <p class="sub">See how many times each product has been ordered.</p>
+                <h2>📅 Report Centre</h2>
+                <p class="sub">Choose a date range to review sales, payments, and operations.</p>
+                <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:16px 0 0;">
+                    <label style="margin:0;">From <input type="date" id="report-from"></label>
+                    <label style="margin:0;">To <input type="date" id="report-to"></label>
+                    <button class="admin-btn green" style="width:auto;margin:0;" onclick="loadSummaryReport()">Run report</button>
+                </div>
+                <div id="summaryReport" class="sub" style="margin-top:18px;">Choose a date range to view operational totals.</div>
+            </div>
+
+            <div class="admin-card" style="margin-bottom:24px;">
+                <h2>📊 Product Sales Report</h2>
+                <p class="sub">Compare online orders and physical counter sales by product.</p>
                 <div class="export-btns">
                     <button class="export-btn" onclick="exportProductsCSV()">📥 Export Products CSV</button>
                     <button class="export-btn" onclick="exportOrdersCSV()">📥 Export Orders CSV</button>
                     <button class="export-btn" onclick="exportAuditCSV()">📥 Export Operations Audit</button>
                 </div>
-                <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:16px 0;">
-                    <label style="margin:0;">From <input type="date" id="report-from"></label>
-                    <label style="margin:0;">To <input type="date" id="report-to"></label>
-                    <button class="admin-btn green" style="width:auto;margin:0;" onclick="loadSummaryReport()">Run report</button>
-                </div>
-                <div id="summaryReport" class="sub">Choose a date range to view operational totals.</div>
                 <div style="overflow-x:auto;">
                     <table class="report-table" id="productReportTable">
                         <thead>
@@ -1084,7 +1090,7 @@ function loadSummaryReport() {
         var t = data.totals;
         var methodText = Object.keys(data.byPaymentMethod).map(function (method) {
             var row = data.byPaymentMethod[method];
-            return method + ': ' + row.orders + ' orders / ₦' + Number(row.total).toLocaleString() + ' / paid ₦' + Number(row.paid).toLocaleString();
+            return method + ': ' + row.orders + ' online orders / ' + (row.physicalSales || 0) + ' physical sales / ₦' + Number(row.total).toLocaleString() + ' / paid ₦' + Number(row.paid).toLocaleString();
         }).join('<br>');
         var workers = Object.keys(data.workerActivity).map(function (id) {
             var row = data.workerActivity[id];
@@ -1211,6 +1217,41 @@ function loadAdminStats() {
     });
 }
 
+function showAdminNotification(title, details, color) {
+    var banner = document.getElementById('adminNotifications');
+    if (!banner) return;
+    var card = document.createElement('div');
+    card.className = 'admin-card2';
+    card.style.marginBottom = '12px';
+    card.style.borderColor = color || '#16a34a';
+    card.innerHTML = '<strong>' + title + '</strong><div>' + details + '</div>';
+    banner.prepend(card);
+    setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 60000);
+}
+
+function startAdminAlerts() {
+    var stream = window.LordTempsInventoryStream;
+    if (!stream || stream.datasetAdminAlerts === 'true') return;
+    stream.datasetAdminAlerts = 'true';
+    stream.addEventListener('physical_sale_recorded', function (event) {
+        try {
+            var sale = JSON.parse(event.data);
+            showAdminNotification('Physical sale completed', 'Total: ₦' + Number(sale.total || 0).toLocaleString() + ' • ' + (sale.itemCount || 0) + ' item lines', '#16a34a');
+            loadAdminInventory();
+            loadAdminStats();
+            if (document.getElementById('tab-reports').style.display !== 'none') { loadReports(); loadSummaryReport(); }
+        } catch (err) {}
+    });
+    stream.addEventListener('payment_confirmed', function (event) {
+        try {
+            var payment = JSON.parse(event.data);
+            showAdminNotification('Payment confirmed', 'Order #' + (payment.orderRef || '') + ' • ₦' + Number(payment.total || 0).toLocaleString() + ' via ' + (payment.provider || 'payment'), '#16a34a');
+            loadAdminStats();
+            if (document.getElementById('tab-reports').style.display !== 'none') loadSummaryReport();
+        } catch (err) {}
+    });
+}
+
 /* Init */
 window.addEventListener("DOMContentLoaded", function () {
     loadAdminCategories();
@@ -1237,6 +1278,7 @@ window.addEventListener("DOMContentLoaded", function () {
         renderAdminProductList();
         loadAdminStats();
         loadOrders();
+        startAdminAlerts();
     } else {
         loginScreen.style.display = "block";
         panel.style.display = "none";

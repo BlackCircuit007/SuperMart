@@ -750,6 +750,7 @@
                         <select id="purge-type">
                             <option value="movements">Stock movements</option>
                             <option value="orders">Orders (incl. their payment records)</option>
+                            <option value="sales">Physical sales (POS counter sales)</option>
                         </select>
                     </label>
                     <label style="margin:0;">From <input type="date" id="purge-from"></label>
@@ -858,6 +859,9 @@
             <div class="admin-card">
                 <h2>🧾 Physical Sales</h2>
                 <p class="sub">Every counter sale recorded at the point of sale, listed by the worker who collected it. Use this to verify physical revenue independently of stock movements.</p>
+                <div class="export-btns" style="margin-bottom:12px;">
+                    <button class="export-btn" onclick="exportPhysicalSalesCSV()">📥 Export Physical Sales CSV</button>
+                </div>
                 <div style="overflow-x:auto;">
                     <table class="report-table" id="adminPhysicalSalesTable">
                         <thead>
@@ -1198,7 +1202,9 @@ function purgeHistory() {
     if (!from || !to) { showToast('Choose a From and To date', 'error'); return; }
     if (from > to) { showToast('"From" must be on or before "To"', 'error'); return; }
 
-    var label = type === 'orders' ? 'orders (and their payment records)' : 'stock movements';
+    var label = type === 'orders' ? 'orders (and their payment records)'
+        : type === 'sales' ? 'physical sales (POS counter sales)'
+        : 'stock movements';
     if (!confirm('Permanently delete all ' + label + ' between ' + from + ' and ' + to + '?\n\nThis cannot be undone.')) return;
 
     apiPurgeHistory(type, from, to).then(function (result) {

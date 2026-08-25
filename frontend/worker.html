@@ -1474,7 +1474,42 @@ function closeReceiptPreview() {
 }
 
 function printReceiptPreview() {
-    window.print();
+    // Print in a dedicated popup that contains ONLY the receipt markup and its
+    // own minimal CSS. Printing the dashboard page itself dragged in hidden
+    // layout and produced 5-6 pages with the receipt on the last one; a clean
+    // document guarantees exactly the receipt copies, nothing else.
+    var container = document.getElementById('receiptPreviewContainer');
+    if (!container) { window.print(); return; }
+
+    var win = window.open('', '_blank', 'width=420,height=640');
+    if (!win) {
+        showToast('Allow pop-ups to print the receipt', 'error');
+        return;
+    }
+    win.document.write(
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title><style>' +
+        'body { margin: 0; padding: 8mm; font-family: "Courier New", monospace; color: #000; background: #fff; }' +
+        '.receipt-print { width: 100%; max-width: 300px; margin: 0 auto 8mm; font-size: 12px; line-height: 1.45; box-sizing: border-box; }' +
+        '.receipt-print .rp-head { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }' +
+        '.receipt-print .rp-head h4 { margin: 0 0 2px; font-size: 15px; }' +
+        '.receipt-print .rp-head div { font-size: 11px; }' +
+        '.receipt-print .rp-row { display: flex; justify-content: space-between; }' +
+        '.receipt-print .rp-items { border-top: 1px dashed #000; border-bottom: 1px dashed #000; margin: 6px 0; padding: 6px 0; }' +
+        '.receipt-print table.rp-items { width: 100%; border-collapse: collapse; font-size: 11px; }' +
+        '.receipt-print table.rp-items td, .receipt-print table.rp-items th { padding: 2px 0; text-align: left; }' +
+        '.receipt-print th.qty, .receipt-print td.qty { text-align: center; }' +
+        '.receipt-print th.amt, .receipt-print td.amt { text-align: right; }' +
+        '.receipt-print .rp-total { font-weight: 700; font-size: 13px; }' +
+        '.receipt-print .rp-copy { text-align: center; font-weight: 700; letter-spacing: 1px; margin-top: 10px; border-top: 1px dashed #000; padding-top: 8px; }' +
+        '.receipt-print .rp-thanks { text-align: center; margin-top: 2px; }' +
+        '@media print { @page { margin: 8mm; } body { padding: 0; } .receipt-print { page-break-inside: avoid; } }' +
+        '</style></head><body>' + container.innerHTML + '</body></html>');
+    win.document.close();
+    win.focus();
+    // Give the popup a moment to lay out, then open the print dialog.
+    setTimeout(function () {
+        win.print();
+    }, 300);
 }
 
 function printLastReceipt() {

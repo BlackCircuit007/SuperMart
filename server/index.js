@@ -1157,6 +1157,32 @@ app.get('/api/admin/physical-sales', authRequired, adminRequired, async (req, re
     }
 });
 
+// Export every recorded counter sale as CSV so admins can archive physical
+// revenue independently of stock movements / online orders.
+app.get('/api/admin/export/physical-sales', authRequired, adminRequired, async (req, res) => {
+    try {
+        const rows = await pool.query(
+            `SELECT id, sale_ref, actor_name, actor_worker_type, payment_method,
+                    total, amount_paid, change_due, items, created_at
+             FROM physical_sales ORDER BY created_at DESC`);
+        const header = ['id', 'receipt_ref', 'worker', 'worker_type', 'payment_method',
+            'total', 'amount_paid', 'change_due', 'item_count', 'items', 'date'];
+        const csvRows = [header].concat(rows.rows.map(s => [
+            s.id, s.sale_ref, s.actor_name, s.actor_worker_type, s.payment_method,
+            s.total, s.amount_paid, s.change_due,
+            (() => { try { return (JSON.parse(s.items || '[]')).length; } catch (e) { return 0; } })(),
+            s.items || '', s.created_at
+        ]));
+        const csv = csvRows.map(row => row.map(cell => `"${String(cell == null ? '' : cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=physical-sales.csv');
+        res.send(csv);
+    } catch (err) {
+        console.error('Export physical sales error:', err);
+        res.status(500).json({ error: 'Server error exporting physical sales' });
+    }
+});
+
 // ===== POS INTEGRATION API (external systems) ================================
 // Contract for a REAL supermarket POS once we know which system that
 // supermarket uses and what integration mechanism it provides. This is NOT a
@@ -2458,8 +2484,8 @@ app.get('/api/admin/export/movements', authRequired, adminRequired, async (req, 
 app.post('/api/admin/history/purge', authRequired, adminRequired, async (req, res) => {
     try {
         const { type, from, to } = req.body;
-        if (!['movements', 'orders'].includes(type)) {
-            return res.status(400).json({ error: "type must be 'movements' or 'orders'" });
+        if (!['movements', 'orders', 'sales'].includes(type)) {
+            return res.status(400).json({ error: "type must be 'movements', 'orders' or 'sales'" });
         }
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to || ''))) {
             return res.status(400).json({ error: 'from and to must be YYYY-MM-DD' });
@@ -2473,6 +2499,12 @@ app.post('/api/admin/history/purge', authRequired, adminRequired, async (req, re
         if (type === 'movements') {
             const result = await pool.query(
                 'DELETE FROM stock_movements WHERE created_at >= $1 AND created_at <= $2',
+                [start, end]);
+            deleted = result.rowCount || 0;
+        } else if (type === 'sales') {
+            // Recorded POS counter sales (the Physical Sales report).
+            const result = await pool.query(
+                'DELETE FROM physical_sales WHERE created_at >= $1 AND created_at <= $2',
                 [start, end]);
             deleted = result.rowCount || 0;
         } else {

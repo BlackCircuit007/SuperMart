@@ -381,6 +381,12 @@ function exportMovementsCSV() {
     window.open(API_BASE + '/api/admin/export/movements?token=' + token, '_blank');
 }
 
+function exportPhysicalSalesCSV() {
+    const token = getToken();
+    if (!token) return;
+    window.open(API_BASE + '/api/admin/export/physical-sales?token=' + token, '_blank');
+}
+
 // Purge old history records in a date range (admin only, irreversible).
 async function apiPurgeHistory(type, from, to) {
     return apiRequest('/api/admin/history/purge', {

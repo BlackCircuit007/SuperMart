@@ -366,13 +366,13 @@ body.dark-mode .search-bar .voice-btn {
     padding: 6px 8px;
 }
 
-/* Navbar inner container prevents overflow */
+/* Navbar inner container - min-width:0 lets it shrink in flex,
+   NO overflow:hidden here or it would clip the category dropdown */
 .navbar .nav-row > div:first-child {
     display: flex;
     align-items: center;
     gap: 12px;
     min-width: 0;
-    overflow: hidden;
 }
 
 .navbar .nav-row .search-bar {

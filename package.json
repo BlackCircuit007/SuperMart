@@ -8,6 +8,8 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
+    "db:start": "C:\\Users\\user\\pgsql\\pgsql\\bin\\pg_ctl.exe -D C:\\Users\\user\\pgsql\\data -l C:\\Users\\user\\pgsql\\server.log start",
+    "db:stop": "C:\\Users\\user\\pgsql\\pgsql\\bin\\pg_ctl.exe -D C:\\Users\\user\\pgsql\\data stop",
     "desktop": "electron .",
     "icons": "node generate-icons.js",
     "dist": "electron-builder --win nsis",
@@ -22,6 +24,7 @@
     "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@neon/config": "^1.2.0",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
     "nodemon": "^3.0.1"

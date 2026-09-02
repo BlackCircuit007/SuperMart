@@ -211,7 +211,7 @@ app.post('/api/register', async (req, res) => {
         // A real account can only exist after verification. The legacy branch
         // below lets older unverified accounts recover without creating a
         // second user row.
-        const existing = await db.findBy('users', u => u.email === normalizedEmail);
+        const existing = await db.findOneWhere('users', 'email = $1', [normalizedEmail]);
         if (existing) {
             if (Number(existing.is_verified) === 0 && existing.role === 'buyer') {
                 const code = await createVerificationCode(existing);
@@ -273,8 +273,8 @@ app.post('/api/verify', async (req, res) => {
         }
 
         const normalizedEmail = email.toLowerCase();
-        const pending = await db.findBy('pending_registrations', p => p.email === normalizedEmail);
-        let user = await db.findBy('users', u => u.email === normalizedEmail);
+        const pending = await db.findOneWhere('pending_registrations', 'email = $1', [normalizedEmail]);
+        let user = await db.findOneWhere('users', 'email = $1', [normalizedEmail]);
         if (pending) {
             user = await db.insert('users', {
                 name: pending.name,
@@ -323,8 +323,8 @@ app.post('/api/verify/resend', async (req, res) => {
         }
 
         const normalizedEmail = email.toLowerCase();
-        const user = await db.findBy('users', u => u.email === normalizedEmail);
-        const pending = await db.findBy('pending_registrations', p => p.email === normalizedEmail);
+        const user = await db.findOneWhere('users', 'email = $1', [normalizedEmail]);
+        const pending = await db.findOneWhere('pending_registrations', 'email = $1', [normalizedEmail]);
         if (!user && !pending) {
             return res.status(404).json({ error: 'No pending registration found. Please register again.' });
         }
@@ -374,7 +374,7 @@ app.post('/api/auth/email-login', async (req, res) => {
             if (!pending || pending.email !== payload.email) {
                 return res.status(400).json({ error: 'This sign-in link is no longer valid' });
             }
-            const existing = await db.findBy('users', u => u.email === pending.email);
+            const existing = await db.findOneWhere('users', 'email = $1', [pending.email]);
             if (existing) {
                 return res.status(400).json({ error: 'An account with this email already exists. Please log in.' });
             }
@@ -424,8 +424,8 @@ app.post('/api/login', async (req, res) => {
         // first sign-in, forcing repeated row deletions and re-adds.)
         if (loginCode) {
             const normalizedCode = String(loginCode).trim().toUpperCase();
-            const workerCode = await db.findBy('worker_codes', wc =>
-                String(wc.login_code).trim().toUpperCase() === normalizedCode);
+            // SQL-backed lookup — was a full worker_codes table scan per login.
+            const workerCode = await db.findOneWhere('worker_codes', 'UPPER(TRIM(login_code)) = $1', [normalizedCode]);
             if (!workerCode) {
                 return res.status(400).json({ error: 'Invalid login code' });
             }
@@ -453,8 +453,8 @@ app.post('/api/login', async (req, res) => {
             return res.status(400).json({ error: 'Email/Username is required' });
         }
 
-        // Regular login with password
-        const user = await db.findBy('users', u => u.email === email.toLowerCase());
+        // Regular login with password (single-row indexed lookup, not a table scan)
+        const user = await db.findOneWhere('users', 'email = $1', [email.toLowerCase()]);
         if (!user) {
             return res.status(400).json({ error: 'Invalid credentials' });
         }
@@ -483,6 +483,10 @@ app.post('/api/login', async (req, res) => {
             }
         });
     } catch (err) {
+        if (isDatabaseDown(err)) {
+            console.error('Login error (database unavailable):', err.message);
+            return res.status(503).json({ error: 'Database is temporarily unavailable. Please try again shortly.' });
+        }
         console.error('Login error:', err);
         res.status(500).json({ error: 'Server error during login' });
     }
@@ -2132,7 +2136,7 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
         if (!['ONLINE', 'PHYSICAL', 'UNIVERSAL'].includes(workerType)) return res.status(400).json({ error: 'Invalid worker type' });
 
         // Check if user exists
-        const existing = await db.findBy('users', u => u.email === email.toLowerCase());
+        const existing = await db.findOneWhere('users', 'email = $1', [email.toLowerCase()]);
         if (existing) {
             return res.status(400).json({ error: 'A user with this email already exists' });
         }
@@ -2197,7 +2201,7 @@ app.post('/api/admin/workers', authRequired, adminRequired, async (req, res) => 
 // Get all workers
 app.get('/api/admin/workers', authRequired, adminRequired, async (req, res) => {
     try {
-        const workers = await db.findAll('users', u => u.role === 'worker');
+        const workers = await db.findAllWhere('users', `role = 'worker'`);
         workers.sort((a, b) => Number(b.id) - Number(a.id));
         res.json({ workers: workers.map(w => ({ id: w.id, name: w.name, email: w.email, role: w.role, worker_type: w.worker_type || 'UNIVERSAL', is_active: Number(w.is_active) !== 0, is_verified: w.is_verified, created_at: w.created_at })) });
     } catch (err) {
@@ -2616,6 +2620,35 @@ app.use('/api', (req, res) => {
     res.status(404).json({ error: 'API endpoint not found' });
 });
 
+// ===== Global error handling =====
+// Detects hosted-database outages (cluster disabled for hitting its monthly
+// Request Unit limit, connection refused, network drops) so users get a
+// clean "try again" message instead of a raw driver error.
+function isDatabaseDown(err) {
+    if (!err) return false;
+    const msg = String(err.message || '');
+    return err.code === '53300' || err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' ||
+        /Request Unit limit|now disabled|connection refused|ECONNRESET|terminating connection/i.test(msg);
+}
+
+// Final error middleware (registered after all routes) — catches anything
+// that falls through route-level try/catch blocks, e.g. malformed JSON bodies.
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    if (isDatabaseDown(err)) {
+        console.error('Database unavailable:', err.message);
+        return res.status(503).json({ error: 'Database is temporarily unavailable. Please try again shortly.' });
+    }
+    console.error('Unhandled server error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+});
+
+// A rejected background promise (email send, SSE write, etc.) must never
+// crash the whole process.
+process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason);
+});
+
 // Start server
 db.init().then(() => {
     // Deployment logs will show an actionable mail configuration error without
@@ -2630,5 +2663,10 @@ db.init().then(() => {
     });
 }).catch(err => {
     console.error('❌ Failed to initialize database:', err.message);
+    if (isDatabaseDown(err)) {
+        console.error('💡 The database server refused the connection. If the error above mentions a');
+        console.error('   "Request Unit limit", your hosted cluster is disabled until you upgrade it or the');
+        console.error('   billing month resets — or point DATABASE_URL in .env at another PostgreSQL database.');
+    }
     process.exit(1);
 });

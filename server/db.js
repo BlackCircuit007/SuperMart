@@ -2,12 +2,25 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-// ===== CockroachDB (PostgreSQL-compatible) connection =====
+// ===== CockroachDB / PostgreSQL connection =====
+// Pool is intentionally SMALL: usage-billed hosted databases (CockroachDB
+// Basic, Neon, etc.) charge per connection and per Request Unit, so every
+// idle connection costs money. Override with DB_POOL_MAX in .env if needed.
+const isLocalDb = /localhost|127\.0\.0\.1|::1/.test(process.env.DATABASE_URL || '');
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('cockroachlabs.cloud')
+    max: Number(process.env.DB_POOL_MAX || 5),
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    ssl: process.env.DATABASE_URL && !isLocalDb
         ? { rejectUnauthorized: false }
         : false
+});
+
+// Without this handler, an error on an IDLE pooled client (network blip,
+// provider failover, cluster temporarily disabled) crashes the whole process.
+pool.on('error', (err) => {
+    console.error('⚠️ Idle database client error:', err.message);
 });
 
 // ===== Table creation =====
@@ -343,6 +356,21 @@ async function findAll(collection, predicate) {
     return rows.filter(predicate);
 }
 
+// ===== SQL-backed lookups (PREFERRED over findBy/findAll) =====
+// findBy/findAll run `SELECT * FROM <table>` (a FULL table scan) and filter
+// in JavaScript — every row scanned costs Request Units on hosted databases
+// and the cost grows as the table grows. These helpers push the filter into
+// the database so a lookup reads exactly the matching row(s).
+async function findOneWhere(table, whereSql, params = []) {
+    const result = await pool.query(`SELECT * FROM ${table} WHERE ${whereSql} LIMIT 1`, params);
+    return result.rows[0] || null;
+}
+
+async function findAllWhere(table, whereSql, params = []) {
+    const result = await pool.query(`SELECT * FROM ${table} WHERE ${whereSql} ORDER BY id`, params);
+    return result.rows;
+}
+
 async function insert(collection, data) {
     const table = collection;
     const keys = Object.keys(data);
@@ -404,22 +432,32 @@ async function withTransaction(callback) {
     }
 }
 
-// ===== Seed data =====
-async function seedData() {
-    // Seed admin user
-    const adminEmail = 'lordtemp';
-    const oldAdmin = await findBy('users', u => u.email === 'admin' && u.role === 'admin');
-    const adminExists = await findBy('users', u => u.email === adminEmail && u.role === 'admin');
-    const hashedPassword = bcrypt.hashSync('LordTemp@2026', 10);
+// ===== Baseline data =====
+// Creates/repairs the rows the app cannot function without (admin user,
+// default supermarket). Uses cheap single-row WHERE lookups so it can run on
+// EVERY server start without scanning whole tables (which costs Request
+// Units on usage-billed hosted databases).
+async function ensureBaselineData() {
+    const adminRows = await pool.query(`SELECT * FROM users WHERE email IN ('lordtemp', 'admin')`);
+    const oldAdmin = adminRows.rows.find(u => u.email === 'admin' && u.role === 'admin') || null;
+    const adminExists = adminRows.rows.find(u => u.email === 'lordtemp' && u.role === 'admin') || null;
+
     if (oldAdmin && !adminExists) {
-        await update('users', oldAdmin.id, { name: 'LordTemp', email: adminEmail, password: hashedPassword, is_verified: 1 });
+        const hashedPassword = bcrypt.hashSync('LordTemp@2026', 10);
+        await update('users', oldAdmin.id, { name: 'LordTemp', email: 'lordtemp', password: hashedPassword, is_verified: 1 });
         console.log('✅ Admin credentials migrated to LordTemp');
     } else if (adminExists) {
-        await update('users', adminExists.id, { name: 'LordTemp', password: hashedPassword, is_verified: 1 });
+        // Only write when something is actually off — a pointless UPDATE on
+        // every restart costs money on usage-billed databases.
+        if (Number(adminExists.is_verified) !== 1) {
+            await update('users', adminExists.id, { is_verified: 1 });
+            console.log('✅ Admin user re-verified');
+        }
     } else {
+        const hashedPassword = bcrypt.hashSync('LordTemp@2026', 10);
         await insert('users', {
             name: 'LordTemp',
-            email: adminEmail,
+            email: 'lordtemp',
             password: hashedPassword,
             role: 'admin',
             is_verified: 1,
@@ -429,19 +467,29 @@ async function seedData() {
         console.log('✅ Admin user created: LordTemp');
     }
 
-    // Seed the default supermarket (the platform's first/primary store).
-    const superRes = await pool.query("SELECT id FROM supermarkets WHERE slug = 'default'");
-    let defaultSupermarketId = superRes.rows[0] ? String(superRes.rows[0].id) : null;
-    if (!defaultSupermarketId) {
-        const created = await insert('supermarkets', {
+    // Default supermarket (the platform's first/primary store)
+    const superRes = await pool.query(`SELECT id FROM supermarkets WHERE slug = 'default' LIMIT 1`);
+    if (superRes.rows.length === 0) {
+        await insert('supermarkets', {
             name: 'Default Store',
             slug: 'default',
             is_active: 1,
             created_at: new Date().toISOString()
         });
-        defaultSupermarketId = String(created.id);
         console.log('✅ Default supermarket created');
     }
+}
+
+// ===== Seed data =====
+// Full seeding (incl. one-time backfills). Only called when the schema is
+// created fresh or DB_SYNC_ON_START=true — never on routine restarts.
+async function seedData() {
+    await ensureBaselineData();
+
+    // Seed the default supermarket (the platform's first/primary store).
+    // ensureBaselineData() above guarantees it exists at this point.
+    const superRes = await pool.query(`SELECT id FROM supermarkets WHERE slug = 'default' LIMIT 1`);
+    const defaultSupermarketId = superRes.rows[0] ? String(superRes.rows[0].id) : null;
 
     // One-time backfill: migrate legacy products.stock into the inventory table.
     // inventory becomes the source of truth; products.stock is kept in sync as a mirror.
@@ -454,21 +502,24 @@ async function seedData() {
             [name, slug, new Date().toISOString()]
         );
     }
-    for (const p of allProducts) {
-        const existing = await pool.query(
-            'SELECT id FROM inventory WHERE supermarket_id = $1 AND product_id = $2',
-            [defaultSupermarketId, String(p.id)]
-        );
-        if (existing.rows.length === 0) {
-            await insert('inventory', {
-                supermarket_id: defaultSupermarketId,
-                product_id: String(p.id),
-                quantity: Number(p.stock) || 0,
-                low_stock_threshold: 5,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            });
-        }
+    // One set-based query finds everything that still needs backfilling,
+    // instead of issuing one SELECT per product.
+    const backfillTargets = await pool.query(
+        `SELECT p.* FROM products p
+         WHERE NOT EXISTS (
+             SELECT 1 FROM inventory i WHERE i.supermarket_id = $1 AND i.product_id = p.id
+         )`,
+        [defaultSupermarketId]
+    );
+    for (const p of backfillTargets.rows) {
+        await insert('inventory', {
+            supermarket_id: defaultSupermarketId,
+            product_id: String(p.id),
+            quantity: Number(p.stock) || 0,
+            low_stock_threshold: 5,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        });
     }
 
     // Seed products if empty
@@ -515,13 +566,35 @@ async function seedData() {
 }  
 
 // ===== Init =====
+async function tablesExist() {
+    // One cheap catalog lookup — replaces replaying ~40 DDL statements on
+    // every server start (extremely expensive on usage-billed databases).
+    const r = await pool.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users' LIMIT 1`
+    );
+    return r.rowCount > 0;
+}
+
 async function init() {
     if (!process.env.DATABASE_URL) {
-        console.error('❌ DATABASE_URL not set. Add your CockroachDB connection string to .env');
+        console.error('❌ DATABASE_URL not set. Add your database connection string to .env');
         process.exit(1);
     }
-    await createTables();
-    await seedData();
+
+    // Schema creation + full seeding now only run when actually needed:
+    //   - the users table is missing (fresh database), OR
+    //   - DB_SYNC_ON_START=true in .env — set this once after editing
+    //     createTables() (e.g. to apply a new migration), then remove it.
+    // Previously both replayed on EVERY start, including every nodemon
+    // restart, which burns through hosted-database quotas very quickly.
+    const forceSync = String(process.env.DB_SYNC_ON_START || '').trim().toLowerCase() === 'true';
+    if (forceSync || !(await tablesExist())) {
+        await createTables();
+        await seedData();
+        console.log('✅ Database schema synced');
+    } else {
+        await ensureBaselineData();
+    }
 }
 
 module.exports = {
@@ -531,6 +604,8 @@ module.exports = {
     getById,
     findBy,
     findAll,
+    findOneWhere,
+    findAllWhere,
     insert,
     update,
     remove,
